@@ -1,0 +1,7 @@
+<svg viewBox="10 14 286 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SoleSight">
+  <!-- SoleSight B2 "Marker" lockup. Wordmark uses Instrument Serif
+       (https://fonts.google.com/specimen/Instrument+Serif) — install locally or
+       load the webfont; falls back to Georgia. -->
+  <path d="M 134 36 L 280 41 Q 287 41.5 285.5 51 L 282.5 70 Q 281.5 78 273.5 77.5 L 128 72.5 Q 120 72 121.5 62.5 L 125 43 Q 126.5 36 134 36 Z" fill="#C7F23E" opacity="0.92"/>
+  <text x="20" y="76" font-family="Instrument Serif, Georgia, serif" font-size="76" fill="#16150F">Sole<tspan font-style="italic">Sight</tspan></text>
+</svg>
