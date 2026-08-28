@@ -774,6 +774,16 @@ const EVENT_LABELS = {
   coverage: "coverage",
 };
 
+// live = real ingested engagement (Bluesky keyless, YouTube Data API v3);
+// modeled = no API access yet, estimated from correlated real signals —
+// matches the honesty badging in README's "Live data sources" table.
+const PLATFORM_META = [
+  { key: "bluesky", label: "Bluesky", live: true },
+  { key: "youtube", label: "YouTube", live: true },
+  { key: "instagram", label: "Instagram", live: false },
+  { key: "tiktok", label: "TikTok", live: false },
+];
+
 /* Where to buy — a real listing when we have one (eBay's cheapest live ask,
    pulled straight from the Browse API), else a deep-link to each
    marketplace's search for this exact model. Works for every shoe, and the
@@ -852,6 +862,22 @@ function openSheet(slug, opts) {
     </div>
 
     ${regionList(m)}
+
+    ${(m.buzz != null || (m.platforms && Object.keys(m.platforms).length)) ? `
+    <h4>Social buzz breakdown</h4>
+    <div class="social-summary">
+      <b>${m.buzz ?? "—"}</b><span class="of">/ 100 buzz index</span>
+      ${m.buzz_momentum != null ? `<span class="delta ${deltaClass(m.buzz_momentum)}" style="margin-left:auto">${arrow(m.buzz_momentum)} ${fmtSigned(m.buzz_momentum, "%")}</span>` : ""}
+    </div>
+    <div class="platform-list">
+      ${PLATFORM_META.map((p) => {
+        const val = (m.platforms || {})[p.key];
+        return `<div class="platform-row">
+          <span class="platform-name">${p.label}<i class="platform-badge ${p.live ? "pf-live" : "pf-modeled"}">${p.live ? "live" : "modeled"}</i></span>
+          <span class="platform-val">${val ? val.toLocaleString() + " engagements/14d" : "—"}</span>
+        </div>`;
+      }).join("")}
+    </div>` : ""}
 
     ${m.sent_summary ? `
     <h4>Community pulse</h4>

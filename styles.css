@@ -419,6 +419,22 @@ svg.chart { width: 100%; height: auto; display: block; }
 .pulse-notes b { color: var(--ink); }
 .al-range { color: var(--ink-3); font-size: .78rem; }
 
+/* social buzz breakdown (sheet) */
+.social-summary { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 12px; }
+.social-summary b { font-family: var(--serif); font-size: 2.2rem; line-height: .8; }
+.social-summary .of { color: var(--ink-3); font-size: .9rem; }
+.platform-list { display: flex; flex-direction: column; gap: 6px; margin: 0 0 4px; }
+.platform-row { display: flex; align-items: center; justify-content: space-between;
+  font-size: .82rem; padding: 8px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--paper); }
+.platform-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.platform-val { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.platform-badge { font-style: normal; font-size: .62rem; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; border-radius: 999px;
+  padding: 2px 8px; }
+.platform-badge.pf-live { background: var(--acid); color: var(--acid-ink); }
+.platform-badge.pf-modeled { background: var(--paper-2); border: 1px solid var(--line-2); color: var(--ink-2); }
+
 @media (max-width: 760px) {
   .mkt-row { grid-template-columns: 1.2fr .5fr 1.6fr .9fr; }
   .mkt-row > div:nth-child(5), .mkt-row > div:nth-child(6) { display: none; }
