@@ -847,6 +847,16 @@ function openSheet(slug, opts) {
       ${m.wiki_views ? `<div class="sf"><b>${m.wiki_views.toLocaleString()}</b><span>Wikipedia views/day${m.wiki_momentum != null ? ` · ${fmtSigned(m.wiki_momentum, "%")}` : ""} (silhouette)</span></div>` : ""}
     </div>
 
+    ${(m.sizes && m.sizes.length) ? `
+    <h4>Sizing</h4>
+    <p class="size-note">Live per-size stock${m.sizes.some((z) => z.price) ? " and price" : ""} from the boutique with the fullest size run — sizing drives both sell-through timing and resale price.</p>
+    <div class="size-grid">
+      ${m.sizes.map((z) => `<div class="size-chip ${z.available ? "in" : "out"}">
+        <span class="size-val">${esc(z.size)}</span>
+        ${z.price ? `<span class="size-price">$${Math.round(z.price)}</span>` : ""}
+      </div>`).join("")}
+    </div>` : ""}
+
     ${priceLadder(m)}
 
     ${buyLinks(m)}
