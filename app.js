@@ -847,24 +847,24 @@ function openSheet(slug, opts) {
       ${m.wiki_views ? `<div class="sf"><b>${m.wiki_views.toLocaleString()}</b><span>Wikipedia views/day${m.wiki_momentum != null ? ` · ${fmtSigned(m.wiki_momentum, "%")}` : ""} (silhouette)</span></div>` : ""}
     </div>
 
-    ${(m.sizes && m.sizes.length) ? `
+    ${(m.size_sources && m.size_sources.length) ? `
     <h4>Sizing</h4>
-    <p class="size-note">Live per-size stock${m.sizes.some((z) => z.price) ? " and price" : ""} — tap a size to see which boutiques have it.</p>
-    <div class="size-grid">
-      ${m.sizes.map((z) => `<details class="size-chip ${z.available ? "in" : "out"}" name="size-acc-${m.slug}">
-        <summary>
-          <span class="size-val">${esc(z.size)}</span>
-          ${z.price ? `<span class="size-price">$${Math.round(z.price)}</span>` : ""}
-        </summary>
-        <div class="size-stores">
-          ${(z.stores || []).length ? z.stores.map((s) => `
-            <a class="size-store-row ${s.available ? "in" : "out"}" href="${s.url || `https://${s.store}`}" target="_blank" rel="noopener">
-              <span class="size-store-name">${STORE_NAMES[s.store] || s.store}</span>
-              <span class="size-store-price">${s.price ? "$" + Math.round(s.price) : ""}</span>
-              <span class="size-store-status">${s.available ? "in stock" : "sold out"}</span>
-            </a>`).join("") : `<div class="size-store-none">No other tracked boutique has this size logged.</div>`}
-        </div>
-      </details>`).join("")}
+    <p class="size-note">Live per-size stock, by boutique — tap one to see its sizes.</p>
+    <div class="size-source-list">
+      ${m.size_sources.map((src) => `
+        <details class="size-source ${src.kind}" name="size-src-${m.slug}">
+          <summary>
+            <span class="size-source-name">${src.source === "ebay" ? "eBay" : (STORE_NAMES[src.source] || src.source)}${src.kind === "resale" ? `<i class="size-source-badge">resale</i>` : ""}</span>
+            <span class="size-source-count">${src.kind === "resale" ? `${src.total_count} size${src.total_count === 1 ? "" : "s"} listed` : `${src.available_count}/${src.total_count} sizes in stock`}</span>
+          </summary>
+          <div class="size-source-sizes">
+            ${src.sizes.map((z) => `
+              <a class="size-source-row ${z.available ? "in" : "out"}" href="${z.url || `https://${src.source}`}" target="_blank" rel="noopener">
+                <span class="size-source-val">${esc(z.size)}</span>
+                ${z.price ? `<span class="size-source-price">$${Math.round(z.price)}</span>` : ""}
+              </a>`).join("")}
+          </div>
+        </details>`).join("")}
     </div>` : ""}
 
     ${priceLadder(m)}
