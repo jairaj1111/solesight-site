@@ -849,12 +849,22 @@ function openSheet(slug, opts) {
 
     ${(m.sizes && m.sizes.length) ? `
     <h4>Sizing</h4>
-    <p class="size-note">Live per-size stock${m.sizes.some((z) => z.price) ? " and price" : ""} from the boutique with the fullest size run — sizing drives both sell-through timing and resale price.</p>
+    <p class="size-note">Live per-size stock${m.sizes.some((z) => z.price) ? " and price" : ""} — tap a size to see which boutiques have it.</p>
     <div class="size-grid">
-      ${m.sizes.map((z) => `<div class="size-chip ${z.available ? "in" : "out"}">
-        <span class="size-val">${esc(z.size)}</span>
-        ${z.price ? `<span class="size-price">$${Math.round(z.price)}</span>` : ""}
-      </div>`).join("")}
+      ${m.sizes.map((z) => `<details class="size-chip ${z.available ? "in" : "out"}" name="size-acc-${m.slug}">
+        <summary>
+          <span class="size-val">${esc(z.size)}</span>
+          ${z.price ? `<span class="size-price">$${Math.round(z.price)}</span>` : ""}
+        </summary>
+        <div class="size-stores">
+          ${(z.stores || []).length ? z.stores.map((s) => `
+            <a class="size-store-row ${s.available ? "in" : "out"}" href="${s.url || `https://${s.store}`}" target="_blank" rel="noopener">
+              <span class="size-store-name">${STORE_NAMES[s.store] || s.store}</span>
+              <span class="size-store-price">${s.price ? "$" + Math.round(s.price) : ""}</span>
+              <span class="size-store-status">${s.available ? "in stock" : "sold out"}</span>
+            </a>`).join("") : `<div class="size-store-none">No other tracked boutique has this size logged.</div>`}
+        </div>
+      </details>`).join("")}
     </div>` : ""}
 
     ${priceLadder(m)}
