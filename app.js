@@ -838,7 +838,10 @@ function openSheet(slug, opts) {
           const pct = s.total ? s.avail / s.total : 0;
           const cls = pct === 0 ? "gone" : pct < 0.34 ? "low" : "ok";
           return `<div class="stk-row">
-            <a class="stk-name" href="${s.url || `https://${s.store}/search?q=${encodeURIComponent(m.name)}`}" target="_blank" rel="noopener">${STORE_NAMES[s.store] || s.store} ↗</a>
+            <div class="stk-name-wrap">
+              <a class="stk-name" href="${s.url || `https://${s.store}/search?q=${encodeURIComponent(m.name)}`}" target="_blank" rel="noopener">${STORE_NAMES[s.store] || s.store} ↗</a>
+              ${s.title ? `<span class="stk-colorway">${esc(s.title)}</span>` : ""}
+            </div>
             <span class="stk-price">${s.price ? "$" + Math.round(s.price) : ""}</span>
             <span class="stk-bar"><i class="${cls}" style="width:${Math.round(pct * 100)}%"></i></span>
             <span class="stk-sizes ${cls}">${pct === 0 ? "sold out" : s.avail + "/" + s.total + " sizes"}</span>
@@ -854,7 +857,10 @@ function openSheet(slug, opts) {
       ${m.size_sources.map((src) => `
         <details class="size-source ${src.kind}" name="size-src-${m.slug}">
           <summary>
-            <span class="size-source-name">${src.source === "ebay" ? "eBay" : (STORE_NAMES[src.source] || src.source)}${src.kind === "resale" ? `<i class="size-source-badge">resale</i>` : ""}</span>
+            <span class="size-source-name-wrap">
+              <span class="size-source-name">${src.source === "ebay" ? "eBay" : (STORE_NAMES[src.source] || src.source)}${src.kind === "resale" ? `<i class="size-source-badge">resale</i>` : ""}</span>
+              ${src.title ? `<span class="size-source-colorway">${esc(src.title)}</span>` : ""}
+            </span>
             <span class="size-source-count">${src.kind === "resale" ? `${src.total_count} size${src.total_count === 1 ? "" : "s"} listed` : `${src.available_count}/${src.total_count} sizes in stock`}</span>
           </summary>
           <div class="size-source-sizes">
