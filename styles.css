@@ -309,6 +309,12 @@ main, .nav, .footer { position: relative; z-index: 1; }
 .sheet-photo img { max-width: 80%; filter: drop-shadow(0 20px 26px rgba(20,19,15,.3)); }
 .sheet-materials { text-align: center; font-size: .76rem; font-style: italic;
   color: var(--ink-3); margin: -2px 0 14px; }
+.colorway-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  margin: 0 0 14px; }
+.colorway-chip { display: inline-flex; align-items: center; gap: 5px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 10px; font-size: .72rem; font-weight: 600; color: var(--ink-2); }
+.colorway-chip b { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .bars { margin: 14px 0; }
 .bar-row { display: grid; grid-template-columns: 96px 1fr 40px; align-items: center; gap: 12px; margin: 9px 0; }
 .bar-row .lab { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }

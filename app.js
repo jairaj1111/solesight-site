@@ -831,6 +831,11 @@ function openSheet(slug, opts) {
     <div class="sheet-photo">${img(m, "")}</div>
     ${m.materials ? `<p class="sheet-materials">${esc(m.materials)}</p>` : ""}
 
+    ${(m.colorways && m.colorways.length) ? `
+    <div class="colorway-row">
+      ${m.colorways.map((c) => `<span class="colorway-chip">${esc(c.name)}<b>${c.price_low === c.price_high ? "$" + Math.round(c.price_low) : "$" + Math.round(c.price_low) + "–$" + Math.round(c.price_high)}</b></span>`).join("")}
+    </div>` : ""}
+
     <div class="sheet-facts">
       ${m.stores_stocking ? `<details class="sf-details">
         <summary class="sf"><b>${m.stores_stocking}</b><span>boutiques stocking${m.sellout_rate != null ? ` · ${Math.round(m.sellout_rate * 100)}% of sizes sold out` : ""} <em class="sf-more">which stores?</em></span></summary>
