@@ -863,7 +863,7 @@ function openSheet(slug, opts) {
         <details class="size-source ${src.kind}" name="size-src-${m.slug}">
           <summary>
             <span class="size-source-name-wrap">
-              <span class="size-source-name">${src.source === "ebay" ? "eBay" : (STORE_NAMES[src.source] || src.source)}${src.kind === "resale" ? `<i class="size-source-badge">resale</i>` : ""}</span>
+              <span class="size-source-name">${src.source === "ebay" ? "eBay" : (STORE_NAMES[src.source] || src.source)}${src.kind === "resale" ? `<i class="size-source-badge">${esc(src.condition || "resale")}</i>` : ""}</span>
               ${src.title ? `<span class="size-source-colorway">${esc(src.title)}</span>` : ""}
             </span>
             <span class="size-source-count">${src.kind === "resale" ? `${src.total_count} size${src.total_count === 1 ? "" : "s"} listed` : `${src.available_count}/${src.total_count} sizes in stock`}</span>
@@ -873,6 +873,7 @@ function openSheet(slug, opts) {
               <a class="size-source-row ${z.available ? "in" : "out"}" href="${z.url || `https://${src.source}`}" target="_blank" rel="noopener">
                 <span class="size-source-val">${esc(z.size)}</span>
                 ${z.price ? `<span class="size-source-price">$${Math.round(z.price)}</span>` : ""}
+                ${z.condition ? `<span class="size-source-cond">${esc(z.condition)}</span>` : ""}
               </a>`).join("")}
           </div>
         </details>`).join("")}

@@ -826,6 +826,8 @@ section[id] { scroll-margin-top: 84px; }
 .size-source-row.out .size-source-val { text-decoration: line-through; color: var(--neg); }
 .size-source-price { color: var(--ink-3); font-weight: 500; font-size: .66rem;
   font-variant-numeric: tabular-nums; }
+.size-source-cond { color: var(--ink-3); font-weight: 500; font-size: .6rem;
+  text-transform: uppercase; letter-spacing: .02em; }
 
 /* ── competitive set in the detail sheet ───────────────────── */
 .comp-note { font-size: .78rem; color: var(--ink-3); line-height: 1.5; margin: -4px 0 10px; }
