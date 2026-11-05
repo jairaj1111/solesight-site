@@ -1,18 +1,88 @@
 /* SoleSight — The Hype Index. Renders everything from data.json. */
 
-// Always open at the top: don't let the browser restore a mid-scroll
-// position on reload, or auto-jump to a leftover #section hash from a
-// previous nav click (content renders async below, so an early hash-jump
-// lands in the wrong place once the real layout comes in). #shoe- hashes are
-// a deep link to a specific model's detail sheet, not a section anchor —
-// leave those alone so init() can open the right sheet once data loads.
-if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-if (location.hash && !location.hash.startsWith("#shoe-"))
-  history.replaceState(null, "", location.pathname + location.search);
-window.scrollTo(0, 0);
-
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* ---------------- pages ----------------
+ * One index.html holds every section, each tagged data-page; the router shows
+ * one page at a time under real URLs (movers.html, radar.html…). build_site.py
+ * writes a copy of index.html per page so a reload or a shared link lands on
+ * the right one — GitHub Pages has no server-side rewrites. */
+const PAGE_TITLES = {
+  home: "SoleSight — The AI Hype Index for Sneakers",
+  "hype-index": "The Index — SoleSight",
+  movers: "Movers — SoleSight",
+  radar: "Launch Radar — SoleSight",
+  market: "Market — SoleSight",
+  "case-study": "Case Study — SoleSight",
+  predict: "Does it predict? — SoleSight",
+  system: "System — SoleSight",
+  method: "Method — SoleSight",
+};
+// Section anchors from the old single-page site, so links shared before the
+// split (solesight.xyz/#movers) still land on the right page.
+const LEGACY_ANCHORS = {
+  top: "home", fit: "home", index: "hype-index", movers: "movers", radar: "radar",
+  market: "market", case: "case-study", predict: "predict", system: "system",
+  method: "method",
+};
+let PAGE = null;
+
+const pageHref = (page) => (page === "home" ? "index.html" : `${page}.html`);
+function pageFromPath() {
+  const seg = location.pathname.split("/").pop().replace(/\.html$/, "");
+  return seg in PAGE_TITLES ? seg : "home";
+}
+
+function showPage(page) {
+  PAGE = page;
+  $$("main > [data-page]").forEach((el) => (el.hidden = el.dataset.page !== page));
+  $$(".nav-links a").forEach((a) => {
+    if (a.dataset.page === page) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  revealNavLink();
+  document.title = PAGE_TITLES[page];
+}
+
+// On narrow screens the nav is a sideways-scrolling row; keep the current
+// page's link in view instead of leaving it off-screen to the right.
+function revealNavLink() {
+  const row = $(".nav-links"), cur = $(".nav-links a[aria-current]");
+  row.scrollLeft = cur ? cur.offsetLeft - row.offsetLeft - 20 : 0;
+}
+window.addEventListener("load", revealNavLink);
+
+function goPage(page) {
+  if (page !== PAGE) history.pushState({ page }, "", pageHref(page));
+  showPage(page);
+  window.scrollTo(0, 0);
+}
+
+// Always open at the top of the page: don't let the browser restore a
+// mid-scroll position from before the content rendered async below.
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+{
+  const anchor = location.hash.slice(1);
+  if (anchor in LEGACY_ANCHORS)
+    history.replaceState(null, "", pageHref(LEGACY_ANCHORS[anchor]));
+  else if (location.hash && !location.hash.startsWith("#shoe-"))
+    history.replaceState(null, "", location.pathname + location.search);
+}
+showPage(pageFromPath());
+window.scrollTo(0, 0);
+
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-page]");
+  if (!a || e.defaultPrevented || e.button !== 0 ||
+      e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  goPage(a.dataset.page);
+});
+window.addEventListener("popstate", () => {
+  const page = pageFromPath();
+  if (page !== PAGE) { showPage(page); window.scrollTo(0, 0); }
+});
 
 let DATA = null;
 let SORT = "hype";
@@ -106,7 +176,7 @@ function renderRadar() {
     $$("#radar-stages .radar-stage").forEach((b) => b.classList.toggle("on",
       b.dataset.stage === STAGE_FILTER));
     render();
-    document.querySelector("#index").scrollIntoView({ behavior: "smooth" });
+    if (STAGE_FILTER) goPage("hype-index");
   }));
 
   $("#radar-events").innerHTML = r.events.map((e) => {
@@ -425,12 +495,29 @@ let SHOW_ALL = false;
 
 function render() {
   const list = view();
+  renderStageNote(list.length);
   renderPodium(list.slice(0, 3));
   const rest = SHOW_ALL ? list.slice(3) : list.slice(3, FEATURED);
   renderBoard(rest);
   renderBoardFoot(list.length);
   renderMovers();
   renderMarket();
+}
+
+// The lifecycle filter is set from the Radar page, so the Index page has to
+// say it's active — otherwise a filtered board looks like a short index.
+function renderStageNote(total) {
+  const note = $("#stage-note");
+  note.hidden = !STAGE_FILTER;
+  if (!STAGE_FILTER) { note.innerHTML = ""; return; }
+  note.innerHTML = `Showing ${total} <b>${STAGE_META[STAGE_FILTER].label.toLowerCase()}</b>
+    model${total === 1 ? "" : "s"} from Launch Radar
+    <button class="chip" id="stage-clear">Clear ×</button>`;
+  $("#stage-clear").onclick = () => {
+    STAGE_FILTER = null;
+    $$("#radar-stages .radar-stage").forEach((b) => b.classList.remove("on"));
+    render();
+  };
 }
 
 function renderBoardFoot(total) {

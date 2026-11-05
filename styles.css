@@ -83,15 +83,24 @@ main, .nav, .footer { position: relative; z-index: 1; }
 .nav-links { display: flex; gap: 30px; }
 .nav-links a {
   font-size: .78rem; font-weight: 650; color: var(--ink-2);
-  text-transform: uppercase; letter-spacing: .05em;
+  text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
   position: relative; padding: 4px 0; transition: color .25s;
 }
 .nav-links a::after {
   content: ''; position: absolute; left: 0; bottom: -2px; height: 2px; width: 0;
   background: var(--ink); transition: width .28s var(--ease);
 }
-.nav-links a:hover { color: var(--ink); }
-.nav-links a:hover::after { width: 100%; }
+.nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--ink); }
+.nav-links a:hover::after, .nav-links a[aria-current="page"]::after { width: 100%; }
+
+/* one page at a time — sections set their own display, so [hidden] needs the weight */
+main > [data-page][hidden] { display: none !important; }
+
+.stage-note {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-top: 14px; font-size: .86rem; color: var(--ink-2);
+}
+.stage-note b { color: var(--ink); }
 .nav-live {
   display: flex; align-items: center; gap: 8px;
   font-size: .72rem; font-weight: 600; letter-spacing: .12em;
@@ -343,12 +352,21 @@ svg.chart { width: 100%; height: auto; display: block; }
 .reveal.in { opacity: 1; transform: none; transition: opacity .7s var(--ease), transform .7s var(--ease); }
 
 /* ─────────────── responsive ─────────────── */
+/* eight page links + the lockup stop fitting one row well before tablet width */
+@media (max-width: 1180px) {
+  .nav { flex-wrap: wrap; row-gap: 12px; }
+  .nav-links {
+    order: 3; width: 100%; gap: 24px; overflow-x: auto;
+    scrollbar-width: none; padding-bottom: 4px;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-links a { flex: none; }
+}
 @media (max-width: 940px) {
   .hero { grid-template-columns: 1fr; }
   .podium { grid-template-columns: 1fr; }
   .movers { grid-template-columns: repeat(2, 1fr); }
   .method-grid { grid-template-columns: repeat(2, 1fr); }
-  .nav-links { display: none; }
   .row { grid-template-columns: 34px 56px minmax(0, 1fr) 70px 64px; }
   .row-spark, .row .col-hide { display: none; }
 }

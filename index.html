@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=34" />
+  <link rel="stylesheet" href="styles.css?v=36" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -26,21 +26,21 @@
 
   <!-- ───────────────── nav ───────────────── -->
   <header class="nav" id="nav">
-    <a class="brand" href="#top" aria-label="SoleSight">
+    <a class="brand" href="index.html" data-page="home" aria-label="SoleSight home">
       <svg class="brand-lockup" viewBox="10 14 286 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
         <path d="M 134 36 L 280 41 Q 287 41.5 285.5 51 L 282.5 70 Q 281.5 78 273.5 77.5 L 128 72.5 Q 120 72 121.5 62.5 L 125 43 Q 126.5 36 134 36 Z" fill="#C7F23E" opacity="0.92"/>
         <text x="20" y="76" font-family="Instrument Serif, Georgia, serif" font-size="76" fill="#16150F">Sole<tspan font-style="italic">Sight</tspan></text>
       </svg>
     </a>
     <nav class="nav-links">
-      <a href="#index">The Index</a>
-      <a href="#movers">Movers</a>
-      <a href="#radar">Radar</a>
-      <a href="#market">Market</a>
-      <a href="#case">Case study</a>
-      <a href="#predict">Predict</a>
-      <a href="#system">System</a>
-      <a href="#method">Method</a>
+      <a href="hype-index.html" data-page="hype-index">The Index</a>
+      <a href="movers.html" data-page="movers">Movers</a>
+      <a href="radar.html" data-page="radar">Radar</a>
+      <a href="market.html" data-page="market">Market</a>
+      <a href="case-study.html" data-page="case-study">Case study</a>
+      <a href="predict.html" data-page="predict">Predict</a>
+      <a href="system.html" data-page="system">System</a>
+      <a href="method.html" data-page="method">Method</a>
     </nav>
     <div class="nav-live"><span class="live-dot"></span> Refreshed nightly</div>
   </header>
@@ -52,7 +52,7 @@
 
   <main id="top">
     <!-- ───────────────── hero ───────────────── -->
-    <section class="hero">
+    <section class="hero" data-page="home">
       <div class="hero-copy reveal">
         <div class="eyebrow" id="hero-eyebrow">The Hype Index</div>
         <h1 class="hero-title">
@@ -70,8 +70,8 @@
           retailers and merchandising teams: spot rising silhouettes, time
           marketing, guide inventory bets with predictive analytics.</p>
         <div class="hero-actions">
-          <a href="#index" class="btn btn-solid">Explore the index</a>
-          <a href="#system" class="btn btn-ghost">How it's built</a>
+          <a href="hype-index.html" data-page="hype-index" class="btn btn-solid">Explore the index</a>
+          <a href="system.html" data-page="system" class="btn btn-ghost">How it's built</a>
         </div>
       </div>
 
@@ -82,10 +82,10 @@
     </section>
 
     <!-- pipeline freshness — real numbers, rendered from data.json -->
-    <section class="fresh" id="fresh-strip"></section>
+    <section class="fresh" id="fresh-strip" data-page="home"></section>
 
     <!-- ───────────────── controls ───────────────── -->
-    <section class="controls" id="index">
+    <section class="controls" id="index" data-page="hype-index">
       <div class="controls-head">
         <h2 class="section-title">The Index</h2>
         <div class="sort">
@@ -100,24 +100,25 @@
       </div>
       <div class="chips" id="brand-chips"></div>
       <div class="chips chips-cats" id="cat-chips"></div>
+      <div class="stage-note" id="stage-note" hidden></div>
     </section>
 
     <!-- podium (top 3) -->
-    <section class="podium" id="podium"></section>
+    <section class="podium" id="podium" data-page="hype-index"></section>
 
     <!-- ranked list -->
-    <section class="board" id="board"></section>
-    <div class="board-foot" id="board-foot"></div>
+    <section class="board" id="board" data-page="hype-index"></section>
+    <div class="board-foot" id="board-foot" data-page="hype-index"></div>
 
     <!-- ───────────────── movers ───────────────── -->
-    <section class="movers-wrap" id="movers">
+    <section class="movers-wrap" id="movers" data-page="movers">
       <h2 class="section-title">This week's movers</h2>
       <p class="section-sub" id="movers-sub"></p>
       <div class="movers" id="movers-grid"></div>
     </section>
 
     <!-- ───────────── launch radar ───────────── -->
-    <section class="radar" id="radar">
+    <section class="radar" id="radar" data-page="radar">
       <h2 class="section-title">Launch <em>radar</em></h2>
       <p class="section-sub">Demand events detected straight from the data — days
         where a model's search interest spiked to 3×+ its trailing 90-day
@@ -128,7 +129,7 @@
     </section>
 
     <!-- ───────────── market intelligence ───────────── -->
-    <section class="market" id="market">
+    <section class="market" id="market" data-page="market">
       <h2 class="section-title">Market <em>intelligence</em></h2>
       <p class="section-sub">The analyst view — every brand and category in the
         index, rolled up: average hype, resale premium over retail, search
@@ -138,13 +139,13 @@
     </section>
 
     <!-- ───────────────── case study ───────────────── -->
-    <section class="case" id="case">
+    <section class="case" id="case" data-page="case-study">
       <h2 class="section-title">Case study: <em>catching a riser</em></h2>
       <div class="case-body" id="case-body"><!-- filled by JS from stored data --></div>
     </section>
 
     <!-- ───────────── does it predict? (backtest) ───────────── -->
-    <section class="bt" id="predict">
+    <section class="bt" id="predict" data-page="predict">
       <h2 class="section-title">Does it actually <em>predict?</em></h2>
       <p class="section-sub">One case study is an anecdote. So the momentum
         engine — the Hype Score's heaviest input — is backtested across every
@@ -155,7 +156,7 @@
     </section>
 
     <!-- ───────────── who it's for ───────────── -->
-    <section class="fit" id="fit">
+    <section class="fit" id="fit" data-page="home">
       <h2 class="section-title">Built for the <em>decision-makers</em></h2>
       <p class="section-sub">The same index answers a different question for
         every desk that touches the sneaker market.</p>
@@ -180,7 +181,7 @@
     </section>
 
     <!-- ───────────── system ───────────── -->
-    <section class="sys" id="system">
+    <section class="sys" id="system" data-page="system">
       <h2 class="section-title">How it's <em>built</em></h2>
       <p class="section-sub">An end-to-end system: nine live data feeds, one
         autonomous nightly pipeline, zero servers — the platform publishes
@@ -262,7 +263,7 @@
     </section>
 
     <!-- ───────────────── method ───────────────── -->
-    <section class="method" id="method">
+    <section class="method" id="method" data-page="method">
       <h2 class="section-title">How the score works</h2>
       <p class="section-sub">Each signal is labeled for what it is today —
         <span class="sig-badge live">live</span> real data refreshed nightly,
@@ -344,7 +345,7 @@
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=42"></script>
   <script src="ask.js?v=2"></script>
 </body>
 </html>
