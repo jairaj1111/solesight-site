@@ -1478,3 +1478,42 @@ html, body { overflow-x: hidden; }
 .bq-ol-lab { display: block; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
 .bq-outlook p { font-size: .84rem; color: var(--ink-2); align-self: center; }
 @media (max-width: 760px) { .bq-outlook { grid-template-columns: 1fr 1fr; } .bq-outlook p { grid-column: 1 / -1; } }
+
+/* For boutiques: report-only print layout (Save as PDF) */
+#bq-print-head { display: none; }
+@media print {
+  @page { size: letter; margin: 14mm 12mm; }
+  body.printing-bq { background: #fff; }
+  body.printing-bq .nav, body.printing-bq .footer, body.printing-bq .ticker,
+  body.printing-bq .ask-fab, body.printing-bq .ask-panel, body.printing-bq .sheet,
+  body.printing-bq .sheet-backdrop, body.printing-bq .skip-link,
+  body.printing-bq main > [data-page]:not(#boutiques),
+  body.printing-bq #boutiques > :not(#bq-out),
+  body.printing-bq .bq-actions .btn { display: none !important; }
+  body.printing-bq #boutiques { padding: 0; max-width: none; }
+  body.printing-bq #bq-out { margin: 0; }
+  body.printing-bq * { -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    animation: none !important; transition: none !important; }
+  body.printing-bq .reveal { opacity: 1 !important; transform: none !important; }
+  body.printing-bq #bq-print-head { display: flex; align-items: center; gap: 18px;
+    padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1.5px solid var(--ink); }
+  body.printing-bq #bq-print-head .brand-lockup { height: 30px; }
+  body.printing-bq #bq-print-head b { display: block; font-size: 15pt; font-weight: 600; letter-spacing: -.02em; }
+  body.printing-bq #bq-print-head span { font-size: 9pt; color: var(--ink-3); }
+  body.printing-bq .bq-shoe, body.printing-bq .bq-comp, body.printing-bq .bq-outlook,
+  body.printing-bq .bq-summary, body.printing-bq tr { break-inside: avoid; }
+  body.printing-bq .bq-h { break-after: avoid; margin-top: 22px; }
+  body.printing-bq .bq-shoe { grid-template-columns: 110px 1fr; gap: 16px; padding: 12px 0; }
+  body.printing-bq .bq-comp summary { list-style: none; }
+  body.printing-bq .bq-comp summary::-webkit-details-marker { display: none; }
+  body.printing-bq a { color: inherit; text-decoration: none; }
+  body.printing-bq .bq-missing { grid-template-columns: repeat(4, 1fr); }
+  body.printing-bq .bq-untracked { columns: 2; }
+}
+@media print {
+  html:has(body.printing-bq) { font-size: 12.5px; }
+  body.printing-bq .bq-shoe { padding: 9px 0; }
+  body.printing-bq .bq-sizes { margin-top: 8px; }
+  body.printing-bq .bq-outlook, body.printing-bq .bq-comp { margin-top: 8px; }
+  body.printing-bq .bq-table td, body.printing-bq .bq-table th { padding: 5px 10px; }
+}

@@ -278,7 +278,8 @@ function bqRender(rep) {
       <div><b>${restock}</b><span>Sizes to restock</span></div>
       <div><b>${n("hold-off") + n("markdown")}</b><span>Don't reorder</span></div>
     </div>
-    <div class="bq-actions"><button class="btn btn-ghost" id="bq-dl">Download as CSV</button>
+    <div class="bq-actions"><button class="btn btn-solid" id="bq-pdf">Save as PDF</button>
+      <button class="btn btn-ghost" id="bq-dl">Download as CSV</button>
       <span class="bq-fine">Based on tonight's index (${new Date(DATA.generated_at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}).
         Size advice blends the typical sneaker size curve with each shoe's own resale prices and sell-outs at
         tracked stores — guidance, not exact quantities${rep.out.some((e) => e.sold != null) ? "" : ". Add a units-sold column to make it specific to your store"}.</span></div>
@@ -293,6 +294,7 @@ function bqRender(rep) {
       <ul class="bq-untracked">${rep.untracked.slice(0, 40).map(([t, q]) => `<li>${esc(t)}<span>${q} pairs</span></li>`).join("")}</ul>` : ""}`;
   $$("#bq-out [data-slug]").forEach((x) => (x.onclick = () => openSheet(x.dataset.slug)));
   $("#bq-dl").onclick = bqDownload;
+  $("#bq-pdf").onclick = bqPrint;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -347,6 +349,69 @@ function bqOverview(rep) {
     <table class="bq-table bq-overview"><thead><tr><th>Store</th><th class="num">Your shoes they carry</th><th class="num">In stock</th>${anyGap ? `<th class="num">Their price vs yours</th>` : ""}</tr></thead>
     <tbody>${rep.overview.slice(0, 10).map((b) => `<tr><td>${esc(b.name)}</td><td class="num">${b.shoes}</td><td class="num">${b.inStock}</td>${anyGap ? `<td class="num">${b.gap == null ? "—" : (b.gap > 0 ? "+" : b.gap < 0 ? "−" : "") + "$" + Math.abs(Math.round(b.gap))}</td>` : ""}</tr>`).join("")}</tbody></table>`;
 }
+
+/* PDF: the browser's own print-to-PDF with a report-only print layout
+   (see "@media print" in styles.css). Crisp text, nothing uploaded, works on
+   desktop and iOS. Competitor tables are expanded for the printout. */
+function bqPrintHead() {
+  const store = BQ_LAST && BQ_LAST.myStore ? bqStoreName(BQ_LAST.myStore) : "Your store";
+  const when = new Date(DATA.generated_at * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  let head = $("#bq-print-head");
+  if (!head) {
+    head = document.createElement("div");
+    head.id = "bq-print-head";
+    $("#bq-out").prepend(head);
+  }
+  const logo = document.querySelector(".nav .brand-lockup");
+  head.innerHTML = `${logo ? logo.outerHTML : "<b>SoleSight</b>"}
+    <div><b>Reorder report · ${esc(store)}</b>
+      <span>${when} · scored against tonight's index · solesight.xyz/boutiques.html</span></div>`;
+  return `SoleSight reorder report - ${store} - ${when}`;
+}
+let BQ_OPENED = [], BQ_SWAPPED = [];
+// Product photos are ~1600px PNGs; embedded as-is they make a ~18 MB PDF.
+// For the printout, swap each for a small JPEG on the tile colour (restored after).
+function bqShrinkImages() {
+  $$("#bq-out img").forEach((im) => {
+    if (!im.complete || !im.naturalWidth || im.dataset.full) return;
+    const w = 320, h = Math.round(w * im.naturalHeight / im.naturalWidth);
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    const cx = cv.getContext("2d");
+    cx.fillStyle = "#F1F1EE"; cx.fillRect(0, 0, w, h);
+    try {
+      cx.drawImage(im, 0, 0, w, h);
+      im.dataset.full = im.src;
+      im.src = cv.toDataURL("image/jpeg", 0.82);
+      BQ_SWAPPED.push(im);
+    } catch (_) { /* cross-origin image: leave it */ }
+  });
+}
+function bqBeforePrint() {
+  if (!BQ_LAST || PAGE !== "boutiques") return;
+  document.body.classList.add("printing-bq");
+  BQ_OPENED = $$("#bq-out details:not([open])");
+  BQ_OPENED.forEach((d) => (d.open = true));
+  bqShrinkImages();
+  bqPrintHead();
+}
+function bqAfterPrint() {
+  document.body.classList.remove("printing-bq");
+  BQ_OPENED.forEach((d) => (d.open = false));
+  BQ_SWAPPED.forEach((im) => { im.src = im.dataset.full; delete im.dataset.full; });
+  BQ_OPENED = []; BQ_SWAPPED = [];
+}
+function bqPrint() {
+  if (!BQ_LAST) return;
+  const title = document.title;
+  bqBeforePrint();
+  document.title = bqPrintHead();          // becomes the suggested PDF file name
+  const restore = () => { document.title = title; window.removeEventListener("afterprint", restore); };
+  window.addEventListener("afterprint", restore);
+  window.print();
+}
+window.addEventListener("beforeprint", bqBeforePrint);   // Cmd+P on the report works too
+window.addEventListener("afterprint", bqAfterPrint);
 
 function bqDownload() {
   if (!BQ_LAST) return;
