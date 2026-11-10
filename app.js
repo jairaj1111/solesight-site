@@ -104,6 +104,8 @@ async function init() {
   buildEyebrow();
   buildChips();
   buildHero();
+  buildHomeRow();
+  buildBrandTiles();
   renderTicker();
   renderFresh();
   renderRadar();
@@ -126,20 +128,61 @@ async function init() {
 function renderTicker() {
   const track = $("#ticker-track");
   if (!track) return;
-  const picks = [...DATA.models]
-    .filter((m) => m.momentum != null && m.hype != null)
-    .sort((a, b) => Math.abs(b.momentum) - Math.abs(a.momentum))
-    .slice(0, 14);
+  // top of the index by Hype Score with its real 7-day change (search
+  // momentum alone is noisy on shoes Google barely registers)
+  const picks = [...DATA.models].filter((m) => m.hype != null)
+    .sort((a, b) => b.hype - a.hype).slice(0, 12);
   const item = (m) => `
     <span class="tk-item" data-slug="${m.slug}">
       <span class="tk-name">${esc(m.name)}</span>
-      <span class="tk-delta ${deltaClass(m.momentum)}">${arrow(m.momentum)} ${fmtSigned(m.momentum, "%")}</span>
       <span class="tk-hype">${m.hype}</span>
-    </span><span class="tk-dot">·</span>`;
+      ${m.hype_delta_7d == null ? "" : `<span class="tk-delta">${fmtSigned(m.hype_delta_7d, "")}</span>`}
+    </span><span class="tk-dot">+</span>`;
   // content twice for a seamless loop
   const half = picks.map(item).join("");
   track.innerHTML = half + half;
   $$(".tk-item", track).forEach((el) => (el.onclick = () => openSheet(el.dataset.slug)));
+}
+
+/* ---------------- homepage: top-6 gallery row + brand tiles ---------------- */
+function buildHomeRow() {
+  const el = $("#home-row");
+  if (!el) return;
+  el.innerHTML = DATA.models.slice(0, 6).map((m) => `
+    <div class="hr-item" data-slug="${m.slug}">
+      <div class="tile">${img(m, "")}</div>
+      <div class="hr-meta"><span>${String(m.rank).padStart(2, "0")}</span><span>${m.hype ?? "—"}</span></div>
+      <div class="hr-name">${esc(m.name)}</div>
+    </div>`).join("");
+  bindCards("#home-row .hr-item");
+  const st = DATA.stats || {};
+  const sub = $("#home-sub");
+  if (sub && st.models) sub.textContent = `${st.models} sneakers ranked every morning on resale prices, search demand, social chatter and what's selling out in ${st.boutiques} boutiques.`;
+}
+
+function buildBrandTiles() {
+  const el = $("#brand-tiles");
+  if (!el) return;
+  const by = {};
+  DATA.models.forEach((m) => (by[m.brand] = by[m.brand] || []).push(m));
+  const brands = Object.keys(by).sort((a, b) => by[b].length - by[a].length).slice(0, 4);
+  $("#brands-meta").textContent = `${Object.keys(by).length} brands · ${DATA.models.length} models`;
+  // each tile shows the brand's highest-ranked shoe that has a photo
+  el.innerHTML = brands.map((b) => {
+    const top = by[b].find((m) => m.img) || by[b][0];
+    return `<a class="brand-tile" href="hype-index.html" data-brand="${esc(b)}">
+      <div class="tile">${img(top, "")}</div>
+      <div class="bt-meta"><span class="bt-name">${esc(b)}</span><span class="bt-count">${by[b].length} models →</span></div></a>`;
+  }).join("");
+  $$("#brand-tiles .brand-tile").forEach((a) => (a.onclick = (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    ACTIVE.clear();
+    ACTIVE.add(a.dataset.brand);
+    $$("#brand-chips .chip").forEach((c) => c.classList.toggle("on", c.dataset.val === a.dataset.brand));
+    render();
+    goPage("hype-index");
+  }));
 }
 
 /* ---------------- launch radar (detected demand events + stages) ---------------- */
@@ -218,7 +261,7 @@ function heatReasons(m) {
   // the 7-day change already sits beside the score; only spell it out when
   // it's the whole story
   if (!out.length && m.hype_delta_7d != null && m.hype_delta_7d >= 2.5)
-    out.push(`Hype Score up ${m.hype_delta_7d.toFixed(1)} pts this week`);
+    out.push(`Hype Score up ${m.hype_delta_7d} pts this week`);
   return out.slice(0, 2);
 }
 function renderHot() {
@@ -238,7 +281,7 @@ function renderHot() {
       <div class="hot-top"><span class="hot-rank">#${m.rank}</span>${stageBadge(m.stage)}</div>
       <div class="hot-img">${img(m, "")}</div>
       <div class="hot-name">${esc(m.name)}</div>
-      <div class="hot-score"><b>${m.hype == null ? "—" : m.hype.toFixed(1)}</b><span>Hype</span>
+      <div class="hot-score"><b>${m.hype ?? "—"}</b><span>Hype</span>
         ${d == null ? "" : `<span class="delta ${deltaClass(d)}">${arrow(d)} ${fmtSigned(d, "")} wk</span>`}</div>
       <ul class="hot-why">${heatReasons(m).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
     </div>`;
@@ -279,8 +322,12 @@ function renderFresh() {
     momEl.textContent = ` (right now: ${skipped} of ${DATA.models.length} models)`;
   }
   const live = document.querySelector(".nav-live");
-  if (live) live.innerHTML = `<span class="live-dot"></span> Refreshed ${when}`;
-  $("#fresh-strip").innerHTML = [
+  if (live) live.innerHTML = `<span class="live-dot"></span> Updated ${when}`;
+  const fu = $("#footer-updated");
+  if (fu) fu.textContent = `Updated nightly · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  const fresh = $("#fresh-strip");
+  if (!fresh) return;
+  fresh.innerHTML = [
     ["Models tracked", `${s.models} across ${s.brands} brands`],
     ["Daily observations", s.daily_observations.toLocaleString("en-US")],
     ["Forecast days generated", s.forecast_days.toLocaleString("en-US")],
@@ -399,14 +446,16 @@ function renderWorkedExample() {
       <thead><tr><th>Signal</th><th>Raw</th><th>0–100</th><th>Weight</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="tm-final">Weighted mean → <b>${score == null ? "—" : score.toFixed(1)} Hype</b>
-    ${Math.abs((score ?? 0) - (m.hype ?? 0)) < 0.4 ? "— matching the published score." : ""}</p>`;
+    <p class="tm-final">Weighted mean → <b>${score == null ? "—" : score.toFixed(1)}</b> raw,
+    which beats ${m.hype ?? "—"}% of every daily score recorded → <b>${m.hype ?? "—"} Hype</b>
+    ${m.hype_raw != null && Math.abs((score ?? 0) - m.hype_raw) < 0.4 ? "— matching the published score." : ""}</p>`;
 }
 
 function buildEyebrow() {
   const d = new Date(DATA.generated_at * 1000);
   const wk = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  $("#hero-eyebrow").textContent = `The Hype Index · Week of ${wk}`;
+  const eb = $("#hero-eyebrow");
+  if (eb) eb.textContent = `The Hype Index · Week of ${wk}`;
 }
 
 /* ---------------- filtering + sorting ---------------- */
@@ -446,46 +495,50 @@ function buildChips() {
   chipRow("#cat-chips", DATA.categories || [], CATS, "All categories");
 }
 
-/* ---------------- hero (overall #1) ---------------- */
+/* ---------------- homepage feature (overall #1) ---------------- */
 function buildHero() {
+  const box = $("#hero-feature");
+  if (!box) return;
   const m = DATA.models.find((x) => x.rank === 1);
   const photo = m.has_360
-    ? `<div class="hf-360" id="hf-360">${img(m, "")}
-         <span class="hf-360-pill">↻ 360° — drag to spin</span></div>`
+    ? `<div class="spin360" id="hf-360">${img(m, "")}
+         <span class="spin-hint">↻ 360° · drag to spin</span></div>`
     : img(m, "");
-  $("#hero-feature").innerHTML = `
-    <div class="hf-glow"></div>
-    <div class="hf-rankpill">#1 · Most hyped</div>
-    <div class="hf-img">${photo}</div>
-    <div class="hf-meta">
-      <div><div class="hf-brand">${esc(m.brand)}</div>
-        <div class="hf-name">${esc(m.name)}</div></div>
-      <div class="hf-score"><b data-count="${m.hype}">0</b><span>Hype score</span></div>
-    </div>
-    <div class="hf-stats">
-      <div class="hf-stat"><b>${m.resale_premium ?? "—"}×</b><span>Resale</span></div>
-      <div class="hf-stat"><b>${fmtSigned(m.momentum, "%")}</b><span>Momentum</span></div>
-      <div class="hf-stat"><b>${m.buzz ?? "—"}</b><span>Buzz</span></div>
-      <div class="hf-stat"><b>$${m.resale_last ?? "—"}</b><span>Last sale</span></div>
+  const stat = (v, l) => `<div class="hf-stat"><b>${v}</b><span>${l}</span></div>`;
+  box.innerHTML = `
+    <div class="tile hf-stage">${photo}</div>
+    <div class="hf-side">
+      <div class="hf-kicker">01 · Most hyped tonight</div>
+      <h2 class="hf-name">${esc(m.name)}</h2>
+      <div class="hf-brand">${esc(m.brand)}</div>
+      <div class="hf-score"><b data-count="${m.hype}">0</b><span>Hype score<br>hotter than ${m.hype}% of every reading</span></div>
+      <div class="hf-stats">
+        ${stat(m.resale_premium == null ? "—" : m.resale_premium.toFixed(1) + "×", "Resale vs retail")}
+        ${stat(m.resale_last == null ? "—" : "$" + m.resale_last.toLocaleString("en-US"), "Lowest ask")}
+        ${stat(m.hype_delta_7d == null ? "—" : fmtSigned(m.hype_delta_7d, ""), "Hype this week")}
+        ${stat(m.stores_stocking || "—", "Boutiques stocking")}
+      </div>
+      <button class="btn btn-solid hf-open">Full read →</button>
     </div>`;
-  const hf = $("#hero-feature");
-  hf.setAttribute("role", "button");
-  hf.setAttribute("tabindex", "0");
-  hf.onclick = () => { if (!SPIN_DRAGGED) openSheet(m.slug); };
-  hf.onkeydown = (e) => {
+  $(".hf-open", box).onclick = () => openSheet(m.slug);
+  const stage = $(".hf-stage", box);
+  stage.setAttribute("role", "button");
+  stage.setAttribute("tabindex", "0");
+  stage.onclick = () => { if (!SPIN_DRAGGED) openSheet(m.slug); };
+  stage.onkeydown = (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     openSheet(m.slug);
   };
-  countUp($("#hero-feature [data-count]"));
-  if (m.has_360) init360(m.slug);
+  countUp($("[data-count]", box));
+  if (m.has_360) init360(m.slug, $("#hf-360"));
 }
 
 /* ---------------- 360° hero viewer ---------------- */
 let SPIN_DRAGGED = false;   // suppress the card's click-to-open after a drag
 
-function init360(slug) {
-  const box = $("#hf-360");
+function init360(slug, box) {
+  if (!box) return;
   const imgEl = box.querySelector("img");
   if (!imgEl) return;
   const N = 36;
@@ -516,7 +569,7 @@ function init360(slug) {
     dragging = true; SPIN_DRAGGED = false;
     startX = e.clientX; startFrame = frame;
     stopAuto();
-    box.setPointerCapture(e.pointerId);
+    try { box.setPointerCapture(e.pointerId); } catch (_) { /* synthetic or stale pointer */ }
   });
   box.addEventListener("pointermove", (e) => {
     if (!dragging) return;
@@ -703,7 +756,7 @@ function countUp(el) {
   const tick = (t) => {
     const p = Math.min(1, (t - t0) / dur);
     const e = 1 - Math.pow(1 - p, 3);
-    el.textContent = (target * e).toFixed(1);
+    el.textContent = Number.isInteger(target) ? Math.round(target * e) : (target * e).toFixed(1);
     if (p < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -970,7 +1023,7 @@ function openSheet(slug, opts) {
     <h2 class="sheet-title" id="sheet-title">${esc(m.name)}</h2>
     <div class="sheet-hype"><b>${m.hype ?? "—"}</b><span class="of">/ 100 hype</span>
       <span class="delta ${deltaClass(m.momentum)}" style="margin-left:auto">${arrow(m.momentum)} ${fmtSigned(m.momentum, "%")} search</span></div>
-    <div class="sheet-photo">${img(m, "")}</div>
+    <div class="sheet-photo">${m.has_360 ? `<div class="spin360" id="sheet-360">${img(m, "")}<span class="spin-hint">↻ 360° · drag to spin</span></div>` : img(m, "")}</div>
     ${m.materials ? `<p class="sheet-materials">${esc(m.materials)}</p>` : ""}
 
     ${(m.colorways && m.colorways.length) ? `
@@ -1106,6 +1159,7 @@ function openSheet(slug, opts) {
       <span><i style="background:var(--ink-3)"></i>Retail $${m.retail ?? "—"}</span>
     </div>
   `;
+  if (m.has_360) init360(m.slug, $("#sheet-360"));
   $("#sheet").classList.add("on");
   $("#sheet").setAttribute("aria-hidden", "false");
   $("#sheet-backdrop").classList.add("on");
