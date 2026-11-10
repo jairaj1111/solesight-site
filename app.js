@@ -9,9 +9,10 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
  * writes a copy of index.html per page so a reload or a shared link lands on
  * the right one — GitHub Pages has no server-side rewrites. */
 const PAGE_TITLES = {
-  home: "SoleSight — The AI Hype Index for Sneakers",
+  home: "SoleSight — The AI Sneaker Hype Index",
   "hype-index": "The Index — SoleSight",
   movers: "Movers — SoleSight",
+  boutiques: "For boutiques — SoleSight",
   radar: "Launch Radar — SoleSight",
   market: "Market — SoleSight",
   "case-study": "Case Study — SoleSight",
@@ -116,6 +117,7 @@ async function init() {
   wireControls();
   wireReveal();
   wireSheet();
+  if (typeof initBoutique === "function") initBoutique();
   window.scrollTo(0, 0);
 
   const hashSlug = location.hash.startsWith("#shoe-")
@@ -339,33 +341,59 @@ function renderFresh() {
 function renderCase() {
   const cs = DATA.case_study;
   const m = cs && DATA.models.find((x) => x.slug === cs.slug);
-  if (!m) { $("#case").style.display = "none"; return; }
-  const surgeName = new Date(cs.surge_month + "-02").toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const baseSpan = `${cs.baseline_months[0]} → ${cs.baseline_months[cs.baseline_months.length - 1]}`;
-  const forecastLine = m.forecast_peak_date
-    ? `Prophet currently projects its demand peaking around <b>${m.forecast_peak_date}</b> —
-       a public call, graded here as the data comes in.`
-    : `Its first 30-day forecast generates on the next nightly run — the call
-       will appear here and get graded in public.`;
-  $("#case-body").innerHTML = `
+  const box = $("#case-body");
+  if (!box) return;
+  if (!m) {
+    box.innerHTML = `<p class="section-sub">No shoe clears the case-study bar tonight
+      (flagged rising 30+ days ago, top 15 now, resale up since). It updates nightly.</p>`;
+    return;
+  }
+  const fmtD = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // rank path chart: rank 1 at the top
+  const pts = cs.path, W = 1100, H = 230, pad = 26;
+  const maxR = Math.max(...pts.map((p) => p.r), 20);
+  const x = (i) => pad + (i / Math.max(1, pts.length - 1)) * (W - 2 * pad);
+  const y = (r) => pad + ((r - 1) / (maxR - 1)) * (H - 2 * pad);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join(" ");
+  const top10 = y(10);
+  const chart = `<svg class="case-chart" viewBox="0 0 ${W} ${H}" role="img"
+      aria-label="Rank on the index from ${fmtD(cs.flagged_on)} to tonight">
+    <rect x="${pad}" y="${pad}" width="${W - 2 * pad}" height="${(top10 - pad).toFixed(1)}" class="cc-top10"/>
+    <text x="${pad + 8}" y="${pad + 15}" class="cc-lab">top 10</text>
+    <path d="${line}" class="cc-line"/>
+    <circle cx="${x(0)}" cy="${y(pts[0].r)}" r="5" class="cc-dot"/>
+    <circle cx="${x(pts.length - 1)}" cy="${y(pts[pts.length - 1].r)}" r="6" class="cc-dot now"/>
+    <text x="${x(0)}" y="${H - 4}" class="cc-lab">${fmtD(pts[0].d)}</text>
+    <text x="${x(pts.length - 1)}" y="${H - 4}" text-anchor="end" class="cc-lab">tonight</text>
+  </svg>`;
+  const askLine = cs.ask_change_pct >= 0
+    ? `Its lowest eBay ask moved with it: about <b>$${cs.ask_then}</b> then, <b>$${cs.ask_now}</b> now (${fmtSigned(cs.ask_change_pct, "%")}, 7-day averages).`
+    : "";
+  box.innerHTML = `
     <div class="case-card reveal">
-      <div class="case-img">${img(m, "")}</div>
+      <div class="case-img tile">${img(m, "")}</div>
       <div class="case-text">
-        <div class="case-kicker">${esc(m.brand)} · every number below is reproducible from the stored dataset</div>
-        <h3>${esc(m.name)}</h3>
-        <p><b>What the signals showed.</b> Through ${baseSpan}, search interest
-        averaged just <b>${cs.baseline_avg}</b> on its own 0–100 scale — a quiet
-        baseline. In ${surgeName} it surged to an average of
-        <b>${cs.surge_avg}</b> — a <b>${cs.surge_multiple}×</b> jump — and has
-        held elevated since.</p>
-        <p><b>What SoleSight did.</b> The day this model entered the index, its
-        14-day momentum (${fmtSigned(m.momentum, "%")}) and sustained intensity
-        scored it <b>${m.hype} Hype</b> — ranked <b>#${m.rank}</b> of
-        ${DATA.models.length} at build time, ahead of every established
-        favorite.</p>
-        <p><b>What happens next.</b> ${forecastLine}</p>
+        <div class="case-kicker">${esc(m.brand)} · picked automatically from stored data, updated nightly</div>
+        <h3>${esc(m.name)}: #${cs.rank_then} to #${cs.rank_now}</h3>
+        <div class="case-stats">
+          <div><b>${fmtD(cs.flagged_on)}</b><span>First flagged rising</span></div>
+          <div><b>#${cs.rank_then}<small> of ${cs.of_then}</small></b><span>Rank that day</span></div>
+          <div><b>#${cs.rank_now}<small> of ${cs.of_now}</small></b><span>Rank tonight</span></div>
+          <div><b>${fmtSigned(cs.ask_change_pct, "%")}</b><span>Lowest eBay ask since</span></div>
+        </div>
+        <p><b>The flag.</b> On ${fmtD(cs.flagged_on)} its Hype Score jumped from
+          <b>${cs.hype_then}</b> to <b>${cs.hype_flag}</b> in a week while it sat at
+          #${cs.rank_then} of ${cs.of_then} — SoleSight marked it as heating.</p>
+        <p><b>What happened next.</b> It didn't go straight up: it cooled off in the
+          weeks after, then climbed into the top of the index and has stayed there —
+          <b>#${cs.rank_now}</b> tonight, ${cs.days} days later, best rank #${cs.best_rank}. ${askLine}</p>
+        <p class="case-verify">Every number here comes from the stored daily history.
+          The data the site published each night is public in
+          <a href="https://github.com/jairaj1111/solesight-site/commits/main/data.json" target="_blank" rel="noopener">the site's history ↗</a>,
+          so the ranks can be checked against what was live at the time.</p>
       </div>
-    </div>`;
+    </div>
+    <div class="case-chart-wrap reveal"><div class="case-chart-head">Rank on the index, week by week</div>${chart}</div>`;
 }
 
 /* ---------------- backtest: does the signal predict? ---------------- */
@@ -511,7 +539,7 @@ function buildHero() {
       <div class="hf-kicker">01 · Most hyped tonight</div>
       <h2 class="hf-name">${esc(m.name)}</h2>
       <div class="hf-brand">${esc(m.brand)}</div>
-      <div class="hf-score"><b data-count="${m.hype}">0</b><span>Hype score<br>hotter than ${m.hype}% of every reading</span></div>
+      <div class="hf-score"><b data-count="${m.hype}">0</b><span>Hype score${m.hype_raw != null ? `<br>hotter than ${m.hype}% of every reading` : ""}</span></div>
       <div class="hf-stats">
         ${stat(m.resale_premium == null ? "—" : m.resale_premium.toFixed(1) + "×", "Resale vs retail")}
         ${stat(m.resale_last == null ? "—" : "$" + m.resale_last.toLocaleString("en-US"), "Lowest ask")}
@@ -910,18 +938,19 @@ function priceLadder(m) {
    estimate, surfaced right next to "Where it trades" since that's the natural
    place a buyer/boutique is already thinking in dollar terms. */
 function resaleForecastBadge(m) {
-  const fc = m.resale_forecast || [];
-  if (!fc.length) return "";
-  const last = fc[fc.length - 1];
-  const estimated = !!m.resale_forecast_estimated;
-  const note = estimated
-    ? `Real daily eBay history is still under 30 days, so this fit is topped up with a modeled backfill (anchored on today's real price, shaped by real search-interest trend) — not sold-price history. Point estimate $${Math.round(last.v)}.`
-    : `30-day Prophet forecast on real daily resale history, 80% confidence interval · point estimate $${Math.round(last.v)}.`;
-  return `<div class="forecast-badge${estimated ? " fb-estimated" : ""}">
-    <div class="fb-lab">Predicted resale · ${shortDate(last.d)}${estimated
-      ? ` <span class="fb-pill">ESTIMATED</span>` : ""}</div>
-    <div class="fb-range">$${Math.round(last.lo)}<span class="fb-dash">–</span>$${Math.round(last.hi)}</div>
-    <div class="fb-note">${note}</div>
+  const o = m.price_outlook;
+  if (!o) return "";
+  if (!o.ok) return `<div class="forecast-badge fb-estimated">
+    <div class="fb-lab">Predicted resale</div>
+    <div class="fb-note">Not shown: this shoe's price history is too patchy to forecast
+      reliably yet (${esc(o.reason)}). It updates nightly.</div></div>`;
+  const dir = o.change_pct >= 2 ? "up" : o.change_pct <= -2 ? "down" : "flat";
+  return `<div class="forecast-badge">
+    <div class="fb-lab">Predicted resale · ${shortDate(o.date)}</div>
+    <div class="fb-range">$${o.lo}<span class="fb-dash">–</span>$${o.hi}</div>
+    <div class="fb-note">Most likely <b>$${o.in30}</b> vs $${o.now} today
+      (<span class="delta ${dir}">${fmtSigned(o.change_pct, "%")}</span>). 30-day forecast of the
+      eBay asking price from its real daily history; 80% range.</div>
   </div>`;
 }
 
@@ -1150,12 +1179,12 @@ function openSheet(slug, opts) {
     <h4>Demand &amp; 30-day forecast</h4>
     ${demandChart(m)}
 
-    <h4>Resale ${(m.resale_series || {}).stockx?.length ? "· StockX vs eBay" : "· live eBay asks"}${(m.resale_forecast || []).length ? " · 30-day forecast" : ""}</h4>
+    <h4>Resale ${(m.resale_series || {}).stockx?.length ? "· StockX vs eBay" : "· live eBay asks"}${m.price_outlook && m.price_outlook.ok ? " · 30-day forecast" : ""}</h4>
     ${resaleChart(m)}
     <div class="legend">
       ${(m.resale_series || {}).stockx?.length ? `<span><i style="background:var(--stockx)"></i>StockX</span>` : ""}
       ${(m.resale_series || {}).ebay?.length ? `<span><i style="background:var(--ebay)"></i>eBay median ask</span>` : ""}
-      ${(m.resale_forecast || []).length ? `<span><i style="background:var(--ink-2)"></i>Predicted price</span>` : ""}
+      ${m.price_outlook && m.price_outlook.ok ? `<span><i style="background:var(--ink-2)"></i>Predicted price</span>` : ""}
       <span><i style="background:var(--ink-3)"></i>Retail $${m.retail ?? "—"}</span>
     </div>
   `;
@@ -1235,7 +1264,7 @@ function demandChart(m) {
 
 function resaleChart(m) {
   const rs = m.resale_series || {}, sx = rs.stockx || [], eb = rs.ebay || [];
-  const fc = m.resale_forecast || [];
+  const fc = (m.price_outlook && m.price_outlook.ok) ? (m.resale_forecast || []) : [];
   if (!sx.length && !eb.length) return "<p style='color:var(--ink-3)'>No resale data.</p>";
   const W = 500, H = 170, L = 6, R = 6, T = 20, B = 22;
   const vals = [...sx, ...eb].map((p) => p.v).concat(m.retail || [])

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>SoleSight — The AI Hype Index for Sneakers</title>
+  <title>SoleSight — The AI Sneaker Hype Index</title>
   <meta name="description" content="AI-powered sneaker market intelligence: transformer NLP, machine-learning demand forecasting and predictive analytics, distilled into one 0–100 Hype Score per silhouette by an autonomous nightly pipeline." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -12,12 +12,12 @@
   <link rel="icon" href="favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-  <meta property="og:title" content="SoleSight — The AI Hype Index for Sneakers" />
+  <meta property="og:title" content="SoleSight — The AI Sneaker Hype Index" />
   <meta property="og:description" content="100+ sneaker models, 12 brands, one 0–100 Hype Score — refreshed nightly by an autonomous AI pipeline." />
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=42" />
+  <link rel="stylesheet" href="styles.css?v=47" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -36,6 +36,7 @@
       <a href="market.html" data-page="market">Market</a>
       <a href="system.html" data-page="system">How it works</a>
       <a href="case-study.html" data-page="case-study">Case study</a>
+      <a href="boutiques.html" data-page="boutiques" class="nav-cta">For boutiques</a>
     </nav>
     <div class="nav-live"><span class="live-dot"></span> Updated nightly</div>
   </header>
@@ -45,7 +46,7 @@
     <section class="home-row" id="home-row" data-page="home" aria-label="Tonight's top six"></section>
 
     <section class="home-head" data-page="home">
-      <h1 class="home-title">The sneaker<br />hype index</h1>
+      <h1 class="home-title">The AI sneaker<br />hype index</h1>
       <div class="home-copy">
         <p id="home-sub">113 sneakers ranked every morning on resale prices,
           search demand, social chatter and what's selling out in 19 boutiques.</p>
@@ -133,8 +134,41 @@
 
     <!-- ───────────────── case study ───────────────── -->
     <section class="case" id="case" data-page="case-study">
-      <h2 class="section-title">Case study: <em>catching a riser</em></h2>
+      <h2 class="section-title">Case study: one shoe's climb</h2>
       <div class="case-body" id="case-body"><!-- filled by JS from stored data --></div>
+    </section>
+
+    <!-- ───────────── for boutiques: inventory → reorder report ───────────── -->
+    <section class="bq" id="boutiques" data-page="boutiques">
+      <h2 class="section-title">For boutiques</h2>
+      <p class="section-sub ms-lede">Upload your inventory and see what to reorder tonight —
+        which shoes, which sizes, which colorways, what competitors charge and where resale
+        prices are heading — scored against the whole market.</p>
+      <label class="bq-drop" id="bq-drop">
+        <input type="file" id="bq-file" accept=".csv,text/csv" />
+        <b>Drop your inventory CSV here</b>
+        <span>or click to choose a file · Shopify exports work as-is</span>
+      </label>
+      <div class="bq-row">
+        <label class="bq-store-pick">Your store
+          <select id="bq-store"></select></label>
+      </div>
+      <div class="bq-row">
+        <button class="btn btn-solid" id="bq-sample" type="button">Try it with a sample inventory</button>
+        <span class="bq-private">Your file is read in your browser. It's never uploaded or stored.</span>
+      </div>
+      <details class="bq-how">
+        <summary>What file works?</summary>
+        <p><b>From Shopify:</b> Products → Export → "All products" → CSV, or Products → Inventory → Export.
+          Either works without editing.</p>
+        <p><b>Any spreadsheet:</b> one row per shoe and size, with columns for the product name,
+          size and quantity in stock. Optional: a style code (e.g. FV5029-100) for exact matching,
+          a colorway, your selling price (to compare against competitors), and units sold in the
+          last 30 days for advice specific to your store.</p>
+        <p><b>Competitor data</b> comes from the public product listings of the 19 boutiques
+          SoleSight tracks, refreshed nightly.</p>
+      </details>
+      <div id="bq-out"></div>
     </section>
 
     <!-- ───────────── does it predict? (backtest) ───────────── -->
@@ -348,6 +382,7 @@ score = % of all recorded daily raw scores below it</pre>
         <a href="predict.html" data-page="predict">Does it predict?</a>
         <a href="method.html" data-page="method">Method</a></div>
       <div class="footer-col"><span class="footer-h">Follow</span>
+        <a href="boutiques.html" data-page="boutiques">For boutiques</a>
         <a href="https://www.instagram.com/solesight_/" target="_blank" rel="noopener">Instagram — @solesight_</a></div>
     </div>
     <div class="footer-base">
@@ -362,7 +397,8 @@ score = % of all recorded daily raw scores below it</pre>
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=49"></script>
+  <script src="app.js?v=52"></script>
+  <script src="boutique.js?v=5"></script>
   <script src="ask.js?v=2"></script>
 </body>
 </html>
