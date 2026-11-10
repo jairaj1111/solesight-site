@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=39" />
+  <link rel="stylesheet" href="styles.css?v=42" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -235,28 +235,58 @@
     <!-- ───────────────── method ───────────────── -->
     <section class="method" id="method" data-page="method">
       <h2 class="section-title">How the score works</h2>
-      <p class="section-sub">Each signal is labeled for what it is today —
-        <span class="sig-badge live">live</span> real data refreshed nightly,
-        <span class="sig-badge api">api-ready</span> real adapters awaiting free
-        API keys (demo data until then), or
-        <span class="sig-badge part">partial</span> some platforms real, the rest
-        modeled, or
-        <span class="sig-badge modeled">modeled</span> synthesized from real
-        search momentum pending a viable API.</p>
-      <div class="method-grid">
-        <div class="method-card reveal"><span class="mc-w">26%</span><span class="sig-badge live">live</span><h3>Resale premium</h3><p>Median <em>deadstock</em> ask (new, unworn) vs. retail from <em>live eBay listings</em>, nightly — the market's dollar vote.</p></div>
-        <div class="method-card reveal"><span class="mc-w">24%</span><span class="sig-badge live">live</span><h3>Search momentum</h3><p>Google Trends interest, last 14 days vs. the prior 14 — movement within each model's own history.</p></div>
-        <div class="method-card reveal"><span class="mc-w">20%</span><span class="sig-badge part">partial</span><h3>Social buzz</h3><p>Bluesky and YouTube <em>live</em>; Instagram/TikTok modeled (no viable APIs).</p></div>
-        <div class="method-card reveal"><span class="mc-w">18%</span><span class="sig-badge live">live</span><h3>Search intensity</h3><p>Current interest relative to <em>that model's own</em> historical peak — never compared across models.</p></div>
-        <div class="method-card reveal"><span class="mc-w">12%</span><span class="sig-badge live">live</span><h3>Community mood</h3><p>Transformer sentiment over live Bluesky, Mastodon, Reddit &amp; YouTube-comment chatter — four keyless community sources.</p></div>
+      <p class="section-sub ms-lede">Every shoe gets one number from 0 to 100.
+        <b>A 99 means it's hotter right now than 99% of every score we've ever
+        recorded.</b> Higher means hotter. That's it.</p>
+
+      <div class="ms-steps">
+        <div class="ms-step reveal"><span class="ms-n">1</span>
+          <h3>We check 5 things, every night</h3>
+          <p>What it resells for, whether Google searches are rising, how many
+            people search for it, how much people post about it, and whether
+            they talk about it positively.</p></div>
+        <div class="ms-step reveal"><span class="ms-n">2</span>
+          <h3>We blend them into one number</h3>
+          <p>Resale counts the most, because real money is the strongest
+            signal. If a shoe is missing one of the five, it's scored on the
+            rest instead of getting a zero.</p></div>
+        <div class="ms-step reveal"><span class="ms-n">3</span>
+          <h3>We compare it to every score ever</h3>
+          <p>That number is ranked against every daily score we've recorded
+            since July 2026, so the hottest shoes land in the 90s and a 90
+            means the same thing every night.</p></div>
+      </div>
+
+      <h3 class="ms-h">The 5 things, and how much each counts</h3>
+      <div class="ms-signals">
+        <div class="ms-sig reveal"><b>26%</b><span><strong>Resale price</strong> — what it's listed for, new, on eBay vs. what it cost in stores.</span></div>
+        <div class="ms-sig reveal"><b>24%</b><span><strong>Search trend</strong> — are Google searches going up or down over the last two weeks?</span></div>
+        <div class="ms-sig reveal"><b>20%</b><span><strong>Social buzz</strong> — posts and views on YouTube and Bluesky. Instagram and TikTok aren't in yet: there's no free way to get their data.</span></div>
+        <div class="ms-sig reveal"><b>18%</b><span><strong>Search level</strong> — how much people are searching for it compared with its own usual.</span></div>
+        <div class="ms-sig reveal"><b>12%</b><span><strong>Mood</strong> — are people talking about it positively or negatively? An AI model reads the posts.</span></div>
+      </div>
+
+      <h3 class="ms-h">Reading the number</h3>
+      <div class="ms-scale">
+        <div><b>90–100</b><span>On fire</span></div>
+        <div><b>70–89</b><span>Hot</span></div>
+        <div><b>40–69</b><span>Steady</span></div>
+        <div><b>0–39</b><span>Quiet</span></div>
       </div>
 
       <details class="tech-method reveal">
-        <summary>Technical methodology — formula, normalization &amp; a worked example</summary>
+        <summary>For the nerds — the full formula, every data source &amp; a worked example</summary>
         <div class="tm-grid">
           <div class="tm-col">
             <h4>The formula</h4>
-            <pre>score = Σ(wᵢ · vᵢ) / Σ(wᵢ)   over available signals</pre>
+            <pre>raw   = Σ(wᵢ · vᵢ) / Σ(wᵢ)   over available signals
+score = % of all recorded daily raw scores below it</pre>
+            <p><b>Why the second line:</b> no shoe maxes all five signals at once,
+            so raw scores bunch low — the hottest shoe in the market sits near 50
+            raw. The published Hype Score is that raw score's rank against every
+            daily score recorded since July 2026, frozen as a fixed reference, so
+            <b>99 means hotter than 99% of all readings</b> and a number means the
+            same thing every night. Rankings never change — only the scale.</p>
             <p>Every component maps onto 0–100 before weighting:</p>
             <ul>
               <li><b>Search intensity</b> — Google's 0–100 index, 14-day mean. Relative to each model's own peak, so it measures <em>how hot the model is vs. itself</em>, not raw volume across models.</li>
@@ -279,20 +309,17 @@
       </details>
 
       <div class="limits reveal">
-        <h4>Known limitations — stated, not hidden</h4>
+        <h4>What the score can't see (yet)</h4>
         <ul>
-          <li>Resale reads <b>asking prices</b>, not completed sales — sold-price
-            feeds are partner-gated. Asks run slightly above realized sales, and
-            the decile trim only softens that.</li>
-          <li>Google Trends is <b>relative</b> interest within each model's own
-            history, never absolute volume — no score ever compares raw search
-            volume across models.</li>
-          <li>Community mood reads Bluesky, a smaller pond than Reddit or X;
-            Reddit joins with a free key, X's API now bills per read.</li>
-          <li>Instagram/TikTok buzz is modeled from real search momentum —
-            neither platform offers a viable free API, and the card says so.</li>
-          <li>Wikipedia attention, press coverage and boutique sell-through stay
-            <b>outside</b> the Hype Score until a backtest earns them weights.</li>
+          <li>Resale uses <b>asking prices</b> on eBay, not final sale prices —
+            sold-price data is only available through paid partnerships.</li>
+          <li>Google search numbers show how hot a shoe is <b>compared with its
+            own history</b>, not how many people search in total.</li>
+          <li>Mood and buzz come from YouTube, Bluesky and Mastodon. Instagram
+            and TikTok aren't included — there's no free way to get their data.</li>
+          <li>Wikipedia views, press coverage and boutique sell-outs show on each
+            shoe's page but <b>don't count toward the score</b> until we've
+            tested that they make it more accurate.</li>
         </ul>
       </div>
     </section>
@@ -335,7 +362,7 @@
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=49"></script>
   <script src="ask.js?v=2"></script>
 </body>
 </html>
