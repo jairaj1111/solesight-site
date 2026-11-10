@@ -164,7 +164,7 @@ const pendingBadge = (m) => (!m.retail && !m.img)
 function renderRadar() {
   const r = DATA.radar;
   if (!r) { $("#radar").style.display = "none"; return; }
-  const order = ["emerging", "heating", "peaking", "steady", "cooling", "dormant"];
+  const order = ["peaking", "heating", "emerging", "steady", "cooling", "dormant"];
   $("#radar-stages").innerHTML = order
     .filter((k) => r.stages[k])
     .map((k) => `<button class="radar-stage ${STAGE_META[k].cls}" data-stage="${k}">
@@ -179,7 +179,9 @@ function renderRadar() {
     if (STAGE_FILTER) goPage("hype-index");
   }));
 
-  $("#radar-events").innerHTML = r.events.map((e) => {
+  renderHot();
+
+  $("#radar-events").innerHTML = r.events.slice(0, 6).map((e) => {
     const m = DATA.models.find((x) => x.slug === e.slug);
     if (!m) return "";
     const when = new Date(e.date + "T12:00:00").toLocaleDateString("en-US",
@@ -200,6 +202,48 @@ function renderRadar() {
   }).join("");
   bindCards("#radar-events .radar-event");
   renderDiscovery();
+}
+
+/* "On fire right now": peaking + climbing shoes, hottest first, each with the
+   strongest real signal behind it — so the page leads with what's popping. */
+const HOT_STAGES = { peaking: 0, heating: 1, emerging: 2 };
+function heatReasons(m) {
+  const out = [];
+  if (m.sellout_rate != null && m.sellout_rate >= 0.5 && m.stores_stocking)
+    out.push(`${Math.round(m.sellout_rate * 100)}% of sizes sold out at ${m.stores_stocking} store${m.stores_stocking === 1 ? "" : "s"}`);
+  if (m.resale_premium != null && m.resale_premium >= 1.25)
+    out.push(`Reselling at ${m.resale_premium.toFixed(1)}× retail`);
+  if (m.momentum != null && m.momentum >= 15) out.push(`Search up ${Math.round(m.momentum)}%`);
+  if (m.press_14d >= 3) out.push(`${m.press_14d} press stories in 2 weeks`);
+  // the 7-day change already sits beside the score; only spell it out when
+  // it's the whole story
+  if (!out.length && m.hype_delta_7d != null && m.hype_delta_7d >= 2.5)
+    out.push(`Hype Score up ${m.hype_delta_7d.toFixed(1)} pts this week`);
+  return out.slice(0, 2);
+}
+function renderHot() {
+  const el = $("#radar-hot");
+  if (!el) return;
+  // Half the biggest shoes on the index (peaking), half the fastest climbers
+  // (heating/emerging, by 7-day Hype change), topped up to 8 if a side is thin.
+  const peaking = DATA.models.filter((m) => m.stage === "peaking");
+  const rising = DATA.models.filter((m) => m.stage === "heating" || m.stage === "emerging")
+    .sort((a, b) => (b.hype_delta_7d ?? 0) - (a.hype_delta_7d ?? 0));
+  let hot = [...peaking.slice(0, 4), ...rising.slice(0, 4)];
+  const rest = [...peaking.slice(4), ...rising.slice(4), ...DATA.models.filter((m) => !(m.stage in HOT_STAGES))];
+  hot = [...hot, ...rest.filter((m) => !hot.includes(m))].slice(0, 8);
+  el.innerHTML = hot.map((m) => {
+    const d = m.hype_delta_7d;
+    return `<div class="hot-card" data-slug="${m.slug}">
+      <div class="hot-top"><span class="hot-rank">#${m.rank}</span>${stageBadge(m.stage)}</div>
+      <div class="hot-img">${img(m, "")}</div>
+      <div class="hot-name">${esc(m.name)}</div>
+      <div class="hot-score"><b>${m.hype == null ? "—" : m.hype.toFixed(1)}</b><span>Hype</span>
+        ${d == null ? "" : `<span class="delta ${deltaClass(d)}">${arrow(d)} ${fmtSigned(d, "")} wk</span>`}</div>
+      <ul class="hot-why">${heatReasons(m).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+    </div>`;
+  }).join("");
+  bindCards("#radar-hot .hot-card");
 }
 
 /* ---------------- discovery: hyped shoes not yet tracked ---------------- */
@@ -229,6 +273,11 @@ function renderFresh() {
   if (!s) return;
   const d = new Date(DATA.generated_at * 1000);
   const when = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const momEl = $("#mom-missing");
+  if (momEl) {
+    const skipped = DATA.models.filter((m) => m.momentum == null).length;
+    momEl.textContent = ` (right now: ${skipped} of ${DATA.models.length} models)`;
+  }
   const live = document.querySelector(".nav-live");
   if (live) live.innerHTML = `<span class="live-dot"></span> Refreshed ${when}`;
   $("#fresh-strip").innerHTML = [
@@ -875,23 +924,29 @@ const PLATFORM_META = [
    pulled straight from the Browse API), else a deep-link to each
    marketplace's search for this exact model. Works for every shoe, and the
    natural home for affiliate links later. */
+// Searching a style code (DD1391-100) returns exactly the pictured shoe on
+// GOAT, Stadium Goods and Flight Club; a display name returns a list of
+// similar ones. StockX gets its exact product page when the catalog has one.
 const BUY_MARKETS = [
-  ["StockX", (q) => `https://stockx.com/search?s=${q}`],
+  ["StockX", (q, m) => m.stockx_url || `https://stockx.com/search?s=${q}`],
   ["GOAT", (q) => `https://www.goat.com/search?query=${q}`],
-  ["Stadium Goods", (q) => `https://www.stadiumgoods.com/en-us/shopping?q=${q}`],
+  ["Stadium Goods", (q) => `https://www.stadiumgoods.com/search?q=${q}`],
   ["Flight Club", (q) => `https://www.flightclub.com/catalogsearch/result?query=${q}`],
 ];
 
 function buyLinks(m) {
-  const q = encodeURIComponent(m.name);
+  const q = encodeURIComponent(m.sku || m.name);
   const ebayHref = m.ebay_url || `https://www.ebay.com/sch/i.html?_nkw=${q}`;
   const ebayBtn = `<a class="buy-btn${m.ebay_url ? " real" : ""}" href="${ebayHref}" target="_blank" rel="noopener">eBay${m.ebay_url ? " · lowest ask" : ""} ↗</a>`;
   const btns = ebayBtn + BUY_MARKETS.map(([name, url]) =>
-    `<a class="buy-btn" href="${url(q)}" target="_blank" rel="noopener">${name} ↗</a>`).join("");
+    `<a class="buy-btn" href="${url(q, m)}" target="_blank" rel="noopener">${name} ↗</a>`).join("");
   const shelves = (m.stockists || []).filter((s) => s.avail > 0).length;
+  const exact = m.sku
+    ? ` ${m.stockx_url ? "StockX opens the exact product; the" : "The"} others search its style code, <b>${esc(m.sku)}</b>, so they land on this exact shoe.`
+    : " Other links search each marketplace for this model.";
   return `<h4>Where to buy</h4>
     <div class="buy-row">${btns}</div>
-    <p class="buy-note">${m.ebay_url ? "eBay links straight to today's cheapest live listing. Other" : "Search"} deep-links go to each marketplace.${shelves
+    <p class="buy-note">${m.ebay_url ? "eBay links straight to today's cheapest live listing." : ""}${exact}${shelves
       ? ` Boutique names in “which stores?” above link to the ${shelves} shop${shelves === 1 ? "" : "s"} with it in stock.`
       : ""} SoleSight isn't a retailer — these point you to live listings.</p>`;
 }
@@ -938,7 +993,7 @@ function openSheet(slug, opts) {
             <span class="stk-bar"><i class="${cls}" style="width:${Math.round(pct * 100)}%"></i></span>
             <span class="stk-sizes ${cls}">${pct === 0 ? "sold out" : s.avail + "/" + s.total + " sizes"}</span>
           </div>`; }).join("")}</div>
-      </details>` : `<div class="sf sf-none"><b>0</b><span>of 15 tracked boutiques have it on shelves — sold through at retail or never a general release</span></div>`}
+      </details>` : `<div class="sf sf-none"><b>0</b><span>of ${DATA.stats.boutiques} tracked boutiques have it on shelves — sold through at retail or never a general release</span></div>`}
       ${m.wiki_views ? `<div class="sf"><b>${m.wiki_views.toLocaleString()}</b><span>Wikipedia views/day${m.wiki_momentum != null ? ` · ${fmtSigned(m.wiki_momentum, "%")}` : ""} (silhouette)</span></div>` : ""}
     </div>
 
@@ -1032,7 +1087,7 @@ function openSheet(slug, opts) {
           <span class="comp-name">${esc(c.name)}<i>${esc(c.brand)}</i></span>
           <span class="comp-hype">${c.hype ?? "—"}<b>hype</b></span>
           <span class="comp-price">$${c.retail}</span>
-          <span class="comp-stock">${c.stores_stocking ?? 0}/15 boutiques${c.sellout_rate != null ? ` · ${Math.round(c.sellout_rate * 100)}% sold out` : ""}</span>
+          <span class="comp-stock">${c.stores_stocking ?? 0}/${DATA.stats.boutiques} boutiques${c.sellout_rate != null ? ` · ${Math.round(c.sellout_rate * 100)}% sold out` : ""}</span>
         </button>`).join("")}
     </div>` : ""}
 

@@ -13,11 +13,11 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <meta property="og:title" content="SoleSight — The AI Hype Index for Sneakers" />
-  <meta property="og:description" content="90 silhouettes, 12 brands, one 0–100 Hype Score — refreshed nightly by an autonomous AI pipeline." />
+  <meta property="og:description" content="100+ sneaker models, 12 brands, one 0–100 Hype Score — refreshed nightly by an autonomous AI pipeline." />
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=36" />
+  <link rel="stylesheet" href="styles.css?v=37" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -120,10 +120,17 @@
     <!-- ───────────── launch radar ───────────── -->
     <section class="radar" id="radar" data-page="radar">
       <h2 class="section-title">Launch <em>radar</em></h2>
-      <p class="section-sub">Demand events detected straight from the data — days
-        where a model's search interest spiked to 3×+ its trailing 90-day
-        baseline — plus where every model sits in its hype lifecycle right now.</p>
+      <p class="section-sub">What's hot right now — the shoes peaking and climbing
+        on the index tonight, and the signal behind each one. Then where every
+        model sits in its hype lifecycle, and the search spikes the data caught.</p>
+      <div class="radar-head"><h3>On fire right now</h3>
+        <span>Peaking or climbing on the Hype Score — tap a shoe for the full read</span></div>
+      <div class="radar-hot" id="radar-hot"></div>
+      <div class="radar-head"><h3>Where every shoe sits</h3>
+        <span>Stage comes from each shoe's Hype Score path — tap one to filter the index</span></div>
       <div class="radar-stages" id="radar-stages"></div>
+      <div class="radar-head"><h3>Search spikes</h3>
+        <span>Days a shoe's search interest jumped to 3×+ its 90-day baseline</span></div>
       <div class="radar-events" id="radar-events"></div>
       <div class="discovery" id="discovery"><!-- filled by JS --></div>
     </section>
@@ -189,7 +196,7 @@
       <div class="sys-flow">
         <div class="sys-step reveal"><span class="sys-n">01</span><h3>Collect</h3>
           <p>Google Trends, eBay (US · UK · DE), Bluesky, Mastodon, YouTube,
-            Google News + sneaker press, Wikipedia and 15 boutique feeds —
+            Google News + sneaker press, Wikipedia and 19 boutique feeds —
             every adapter degrades gracefully if a source refuses.</p></div>
         <div class="sys-step reveal"><span class="sys-n">02</span><h3>Store</h3>
           <p>One SQLite database, saved after every nightly run — with the
@@ -215,7 +222,8 @@
       <p class="sys-roster"><span>The boutique network</span>
         Kith · Undefeated · A Ma Manière · Union LA · Extra Butter ·
         Nice Kicks · Packer · Notre · Xhibition · Bodega · Concepts · Feature ·
-        Lapstone &amp; Hammer · Social Status · Sneaker Politics — shelf
+        Lapstone &amp; Hammer · Social Status · Sneaker Politics · Kickclusive ·
+        Soled Out · Showtime · Sneakerprovider — shelf
         availability polled nightly from each store's public product feed.</p>
 
       <!-- signal provenance — every score input traced to its source -->
@@ -290,7 +298,7 @@
             <p>Every component maps onto 0–100 before weighting:</p>
             <ul>
               <li><b>Search intensity</b> — Google's 0–100 index, 14-day mean. Relative to each model's own peak, so it measures <em>how hot the model is vs. itself</em>, not raw volume across models.</li>
-              <li><b>Search momentum</b> — recent 14d vs. prior 14d percent change, mapped as <code>50 + Δ% × 0.8</code>, clamped to [0, 100]. Saturates at roughly ±62%.</li>
+              <li><b>Search momentum</b> — recent 14d vs. prior 14d percent change, mapped as <code>50 + Δ% × 0.8</code>, clamped to [0, 100]. Saturates at roughly ±62%. Skipped when the prior two weeks average under 5 on Google's scale — a percent change off a baseline that thin is noise, not signal<span id="mom-missing"></span>; those models are scored on their other signals.</li>
               <li><b>Resale premium</b> — median price ÷ retail MSRP, mapped linearly from 0.8× (→ 0) to 2.6× (→ 100). The clamp caps extreme listings; prices are decile-trimmed before the median to drop fakes and typo listings. A model with no known retail price contributes nothing (see missing signals).</li>
               <li><b>Social buzz</b> — daily cross-platform engagement, normalized 0–100 to the model's own peak (same convention as Trends).</li>
               <li><b>Community mood</b> — per-post transformer sentiment <code>P(pos) − P(neg)</code> ∈ [−1, 1], averaged over all scored posts, mapped to 0–100.</li>
@@ -345,7 +353,7 @@
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=44"></script>
   <script src="ask.js?v=2"></script>
 </body>
 </html>
