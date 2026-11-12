@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SoleSight — The AI Sneaker Hype Index</title>
+  <meta name="description" content="AI-powered sneaker market intelligence: transformer NLP, machine-learning demand forecasting and predictive analytics, distilled into one 0–100 Hype Score per silhouette by an autonomous nightly pipeline." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta property="og:title" content="SoleSight — The AI Sneaker Hype Index" />
+  <meta property="og:description" content="100+ sneaker models, 12 brands, one 0–100 Hype Score — refreshed nightly by an autonomous AI pipeline." />
+  <meta property="og:image" content="https://solesight.xyz/og.png" />
+  <meta property="og:url" content="https://solesight.xyz/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="stylesheet" href="styles.css?v=51" />
+</head>
+<body>
+  <a href="#top" class="skip-link">Skip to content</a>
+  <!-- ───────────────── nav ───────────────── -->
+  <header class="nav" id="nav">
+    <a class="brand" href="index.html" data-page="home" aria-label="SoleSight home">
+      <svg class="brand-lockup" viewBox="10 14 286 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+        <path d="M 134 36 L 280 41 Q 287 41.5 285.5 51 L 282.5 70 Q 281.5 78 273.5 77.5 L 128 72.5 Q 120 72 121.5 62.5 L 125 43 Q 126.5 36 134 36 Z" fill="#C7F23E" opacity="0.92"/>
+        <text x="20" y="76" font-family="Instrument Serif, Georgia, serif" font-size="76" fill="#16150F">Sole<tspan font-style="italic">Sight</tspan></text>
+      </svg>
+    </a>
+    <nav class="nav-links">
+      <a href="hype-index.html" data-page="hype-index">Index</a>
+      <a href="movers.html" data-page="movers">Movers</a>
+      <a href="drops.html" data-page="drops">Drops</a>
+      <a href="radar.html" data-page="radar">Radar</a>
+      <a href="market.html" data-page="market">Market</a>
+      <a href="system.html" data-page="system">How it works</a>
+      <a href="case-study.html" data-page="case-study">Case study</a>
+      <a href="boutiques.html" data-page="boutiques" class="nav-cta">For boutiques</a>
+    </nav>
+    <div class="nav-live"><span class="live-dot"></span> Updated nightly</div>
+  </header>
+
+  <main id="top">
+    <!-- ───────────────── home: gallery row ───────────────── -->
+    <section class="home-row" id="home-row" data-page="home" aria-label="Tonight's top six"></section>
+
+    <section class="home-head" data-page="home">
+      <h1 class="home-title">The AI sneaker<br />hype index</h1>
+      <div class="home-copy">
+        <p id="home-sub">113 sneakers ranked every morning on resale prices,
+          search demand, social chatter and what's selling out in 19 boutiques.</p>
+        <div class="home-actions">
+          <a href="hype-index.html" data-page="hype-index" class="btn btn-solid">Open the index</a>
+          <a href="system.html" data-page="system" class="btn btn-ghost">How it works</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- live strip — top of the index with weekly change -->
+    <section class="ticker" data-page="home" aria-hidden="true">
+      <div class="ticker-track" id="ticker-track"></div>
+    </section>
+
+    <!-- #1 tonight, with the 360° spin when we have the frames -->
+    <section class="home-feature" id="hero-feature" data-page="home"></section>
+
+    <section class="home-drops empty" id="home-drops" data-page="home">
+      <div class="home-sec-head"><h2 class="home-h2">Dropping soon</h2>
+        <a class="home-sec-meta" href="drops.html" data-page="drops">Full calendar →</a></div>
+      <div class="hd-list" id="hd-list"></div>
+    </section>
+
+    <section class="home-brands" data-page="home">
+      <div class="home-sec-head"><h2 class="home-h2">Browse by brand</h2>
+        <span class="home-sec-meta" id="brands-meta"></span></div>
+      <div class="brand-tiles" id="brand-tiles"></div>
+    </section>
+
+    <!-- ───────────────── controls ───────────────── -->
+    <section class="controls" id="index" data-page="hype-index">
+      <div class="controls-head">
+        <h2 class="section-title">The Index</h2>
+        <div class="sort">
+          <span class="sort-label">Rank by</span>
+          <div class="seg" id="sort-seg">
+            <button data-sort="hype" class="on">Hype</button>
+            <button data-sort="momentum">Momentum</button>
+            <button data-sort="resale_premium">Resale</button>
+            <button data-sort="buzz">Buzz</button>
+          </div>
+        </div>
+      </div>
+      <div class="chips" id="brand-chips"></div>
+      <div class="chips chips-cats" id="cat-chips"></div>
+      <div class="stage-note" id="stage-note" hidden></div>
+    </section>
+
+    <!-- podium (top 3) -->
+    <section class="podium" id="podium" data-page="hype-index"></section>
+
+    <!-- ranked list -->
+    <section class="board" id="board" data-page="hype-index"></section>
+    <div class="board-foot" id="board-foot" data-page="hype-index"></div>
+
+    <!-- ───────────────── movers ───────────────── -->
+    <section class="movers-wrap" id="movers" data-page="movers">
+      <h2 class="section-title">This week's movers</h2>
+      <p class="section-sub" id="movers-sub"></p>
+      <div class="movers" id="movers-grid"></div>
+    </section>
+
+    <!-- ───────────── launch radar ───────────── -->
+    <section class="radar" id="radar" data-page="radar">
+      <h2 class="section-title">Launch <em>radar</em></h2>
+      <p class="section-sub">What's hot right now — the shoes peaking and climbing
+        on the index tonight, and the signal behind each one. Then where every
+        model sits in its hype lifecycle, and the search spikes the data caught.</p>
+      <div class="radar-head"><h3>On fire right now</h3>
+        <span>Peaking or climbing on the Hype Score — tap a shoe for the full read</span></div>
+      <div class="radar-hot" id="radar-hot"></div>
+      <div class="radar-head"><h3>Where every shoe sits</h3>
+        <span>Stage comes from each shoe's Hype Score path — tap one to filter the index</span></div>
+      <div class="radar-stages" id="radar-stages"></div>
+      <div class="radar-head"><h3>Search spikes</h3>
+        <span>Days a shoe's search interest jumped to 3×+ its 90-day baseline</span></div>
+      <div class="radar-events" id="radar-events"></div>
+      <div class="discovery" id="discovery"><!-- filled by JS --></div>
+    </section>
+
+    <!-- ───────────── market intelligence ───────────── -->
+    <section class="market" id="market" data-page="market">
+      <h2 class="section-title">Market <em>intelligence</em></h2>
+      <p class="section-sub">The analyst view — every brand and category in the
+        index, rolled up: average hype, resale premium over retail, search
+        momentum and share of the top&nbsp;10.</p>
+      <div class="mkt-table" id="mkt-brands"></div>
+      <div class="mkt-cats" id="mkt-cats"></div>
+    </section>
+
+    <!-- ───────────────── case study ───────────────── -->
+    <section class="case" id="case" data-page="case-study">
+      <h2 class="section-title">Case study: one shoe's climb</h2>
+      <div class="case-body" id="case-body"><!-- filled by JS from stored data --></div>
+    </section>
+
+    <!-- ───────────── release calendar ───────────── -->
+    <section class="drops" id="drops" data-page="drops">
+      <h2 class="section-title">Release calendar</h2>
+      <p class="section-sub ms-lede">Upcoming sneaker drops, collected every night from the
+        sneaker press. Dates and prices are as reported — releases slip, so check the
+        retailer before you plan around one.</p>
+      <div class="dr-controls">
+        <div class="seg" id="dr-when">
+          <button data-when="all" class="on">All upcoming</button>
+          <button data-when="week">Next 7 days</button>
+          <button data-when="month">Next 30 days</button>
+        </div>
+        <select id="dr-brand" aria-label="Brand"></select>
+      </div>
+      <div id="dr-list"></div>
+    </section>
+
+    <!-- ───────────── for boutiques: inventory → reorder report ───────────── -->
+    <section class="bq" id="boutiques" data-page="boutiques">
+      <h2 class="section-title">For boutiques</h2>
+      <p class="section-sub ms-lede">Upload your inventory and see what to reorder tonight —
+        which shoes, which sizes, which colorways, what competitors charge and where resale
+        prices are heading — scored against the whole market.</p>
+      <label class="bq-drop" id="bq-drop">
+        <input type="file" id="bq-file" accept=".csv,text/csv" />
+        <b>Drop your inventory CSV here</b>
+        <span>or click to choose a file · Shopify exports work as-is</span>
+      </label>
+      <div class="bq-row">
+        <label class="bq-store-pick">Your store
+          <select id="bq-store"></select></label>
+      </div>
+      <div class="bq-row">
+        <button class="btn btn-solid" id="bq-sample" type="button">Try it with a sample inventory</button>
+        <span class="bq-private">Your file is read in your browser. It's never uploaded or stored.</span>
+      </div>
+      <details class="bq-how">
+        <summary>What file works?</summary>
+        <p><b>From Shopify:</b> Products → Export → "All products" → CSV, or Products → Inventory → Export.
+          Either works without editing.</p>
+        <p><b>Any spreadsheet:</b> one row per shoe and size, with columns for the product name,
+          size and quantity in stock. Optional: a style code (e.g. FV5029-100) for exact matching,
+          a colorway, your selling price (to compare against competitors), and units sold in the
+          last 30 days for advice specific to your store.</p>
+        <p><b>Competitor data</b> comes from the public product listings of the 19 boutiques
+          SoleSight tracks, refreshed nightly.</p>
+      </details>
+      <div id="bq-out"></div>
+    </section>
+
+    <!-- ───────────── does it predict? (backtest) ───────────── -->
+    <section class="bt" id="predict" data-page="predict">
+      <h2 class="section-title">Does it actually <em>predict?</em></h2>
+      <p class="section-sub">One case study is an anecdote. So the momentum
+        engine — the Hype Score's heaviest input — is backtested across every
+        model's full search history: thousands of historical checks asking one
+        question, <em>when a shoe was flagged rising, did that demand still hold
+        weeks later?</em></p>
+      <div class="bt-body" id="bt-body"><!-- filled by JS from data.json --></div>
+    </section>
+
+
+    <!-- ───────────── system ───────────── -->
+    <section class="sys" id="system" data-page="system">
+      <h2 class="section-title">How it's <em>built</em></h2>
+      <p class="section-sub">An end-to-end system: nine live data feeds, one
+        autonomous nightly pipeline, zero servers — the platform publishes
+        itself while its builder sleeps.</p>
+      <div class="sys-flow">
+        <div class="sys-step reveal"><span class="sys-n">01</span><h3>Collect</h3>
+          <p>Google Trends, eBay (US · UK · DE), Bluesky, Mastodon, YouTube,
+            Google News + sneaker press, Wikipedia and 19 boutique feeds —
+            every adapter degrades gracefully if a source refuses.</p></div>
+        <div class="sys-step reveal"><span class="sys-n">02</span><h3>Store</h3>
+          <p>One SQLite database, saved after every nightly run — with the
+            previous night's copy and weekly snapshots kept as backups.</p></div>
+        <div class="sys-step reveal"><span class="sys-n">03</span><h3>Understand</h3>
+          <p>A RoBERTa transformer scores community sentiment; Prophet fits a
+            30-day demand forecast with confidence bands per model.</p></div>
+        <div class="sys-step reveal"><span class="sys-n">04</span><h3>Detect</h3>
+          <p>Launch Radar flags demand spikes ≥3× each model's trailing
+            baseline and labels every lifecycle stage.</p></div>
+        <div class="sys-step reveal"><span class="sys-n">05</span><h3>Score &amp; explain</h3>
+          <p>Five weighted signals blend into a 0–100 Hype Score, plus a
+            plain-English insight per model.</p></div>
+        <div class="sys-step reveal"><span class="sys-n">06</span><h3>Publish</h3>
+          <p>Everything lands in one static <code>data.json</code>; GitHub
+            Actions redeploys this site — no human in the loop.</p></div>
+      </div>
+      <p class="sys-foot">Tool choices, briefly: <b>Prophet</b> because sneaker
+        demand is seasonal and per-model history is short · <b>RoBERTa</b>
+        because community chatter is noisy short-form text · <b>SQLite + one
+        static JSON</b> because zero infrastructure is a feature, not a
+        compromise.</p>
+      <p class="sys-roster"><span>The boutique network</span>
+        Kith · Undefeated · A Ma Manière · Union LA · Extra Butter ·
+        Nice Kicks · Packer · Notre · Xhibition · Bodega · Concepts · Feature ·
+        Lapstone &amp; Hammer · Social Status · Sneaker Politics · Kickclusive ·
+        Soled Out · Showtime · Sneakerprovider — shelf
+        availability polled nightly from each store's public product feed.</p>
+
+      <!-- signal provenance — every score input traced to its source -->
+      <h3 class="prov-title">Signal provenance — every number, traced</h3>
+      <p class="prov-sub">The Hype Score is five weighted signals. Here's exactly
+        where each one comes from and how live it is — nothing black-box.</p>
+      <div class="prov">
+        <div class="prov-row prov-head">
+          <span>Component</span><span>Data source</span><span>Stored / fetched</span><span>Status</span>
+        </div>
+        <div class="prov-row">
+          <span><b>Resale premium</b> <i>.26</i></span>
+          <span>eBay Browse API — deadstock (new/unworn) asks ÷ retail MSRP · US, UK &amp; DE markets, USD-converted</span>
+          <span><code>resale</code> ← resale.py</span>
+          <span><em class="sig-badge live">live</em></span>
+        </div>
+        <div class="prov-row">
+          <span><b>Search momentum</b> <i>.24</i></span>
+          <span>Google Trends — recent 14 days vs. the prior 14</span>
+          <span><code>trends</code> ← google_trends.py</span>
+          <span><em class="sig-badge live">live</em></span>
+        </div>
+        <div class="prov-row">
+          <span><b>Search interest</b> <i>.18</i></span>
+          <span>Google Trends — same rows, level vs. the model's own peak</span>
+          <span><code>trends</code></span>
+          <span><em class="sig-badge live">live</em></span>
+        </div>
+        <div class="prov-row">
+          <span><b>Social buzz</b> <i>.20</i></span>
+          <span>Bluesky + YouTube live · Instagram/TikTok modeled (no viable API)</span>
+          <span><code>social</code> ← bluesky.py, social.py</span>
+          <span><em class="sig-badge part">partial</em></span>
+        </div>
+        <div class="prov-row">
+          <span><b>Community mood</b> <i>.12</i></span>
+          <span>Bluesky + Mastodon + Reddit + YouTube comments, scored by RoBERTa</span>
+          <span><code>reddit_posts</code> ← sentiment.py</span>
+          <span><em class="sig-badge live">live</em></span>
+        </div>
+      </div>
+      <p class="prov-note">Context signals shown across the site — Wikipedia
+        attention, press coverage &amp; momentum, boutique sell-through — stay
+        <em>out</em> of the score until the backtest earns them a weight.</p>
+    </section>
+
+    <!-- ───────────────── method ───────────────── -->
+    <section class="method" id="method" data-page="method">
+      <h2 class="section-title">How the score works</h2>
+      <p class="section-sub ms-lede">Every shoe gets one number from 0 to 100.
+        <b>A 99 means it's hotter right now than 99% of every score we've ever
+        recorded.</b> Higher means hotter. That's it.</p>
+
+      <div class="ms-steps">
+        <div class="ms-step reveal"><span class="ms-n">1</span>
+          <h3>We check 5 things, every night</h3>
+          <p>What it resells for, whether Google searches are rising, how many
+            people search for it, how much people post about it, and whether
+            they talk about it positively.</p></div>
+        <div class="ms-step reveal"><span class="ms-n">2</span>
+          <h3>We blend them into one number</h3>
+          <p>Resale counts the most, because real money is the strongest
+            signal. If a shoe is missing one of the five, it's scored on the
+            rest instead of getting a zero.</p></div>
+        <div class="ms-step reveal"><span class="ms-n">3</span>
+          <h3>We compare it to every score ever</h3>
+          <p>That number is ranked against every daily score we've recorded
+            since July 2026, so the hottest shoes land in the 90s and a 90
+            means the same thing every night.</p></div>
+      </div>
+
+      <h3 class="ms-h">The 5 things, and how much each counts</h3>
+      <div class="ms-signals">
+        <div class="ms-sig reveal"><b>26%</b><span><strong>Resale price</strong> — what it's listed for, new, on eBay vs. what it cost in stores.</span></div>
+        <div class="ms-sig reveal"><b>24%</b><span><strong>Search trend</strong> — are Google searches going up or down over the last two weeks?</span></div>
+        <div class="ms-sig reveal"><b>20%</b><span><strong>Social buzz</strong> — posts and views on YouTube and Bluesky. Instagram and TikTok aren't in yet: there's no free way to get their data.</span></div>
+        <div class="ms-sig reveal"><b>18%</b><span><strong>Search level</strong> — how much people are searching for it compared with its own usual.</span></div>
+        <div class="ms-sig reveal"><b>12%</b><span><strong>Mood</strong> — are people talking about it positively or negatively? An AI model reads the posts.</span></div>
+      </div>
+
+      <h3 class="ms-h">Reading the number</h3>
+      <div class="ms-scale">
+        <div><b>90–100</b><span>On fire</span></div>
+        <div><b>70–89</b><span>Hot</span></div>
+        <div><b>40–69</b><span>Steady</span></div>
+        <div><b>0–39</b><span>Quiet</span></div>
+      </div>
+
+      <details class="tech-method reveal">
+        <summary>For the nerds — the full formula, every data source &amp; a worked example</summary>
+        <div class="tm-grid">
+          <div class="tm-col">
+            <h4>The formula</h4>
+            <pre>raw   = Σ(wᵢ · vᵢ) / Σ(wᵢ)   over available signals
+score = % of all recorded daily raw scores below it</pre>
+            <p><b>Why the second line:</b> no shoe maxes all five signals at once,
+            so raw scores bunch low — the hottest shoe in the market sits near 50
+            raw. The published Hype Score is that raw score's rank against every
+            daily score recorded since July 2026, frozen as a fixed reference, so
+            <b>99 means hotter than 99% of all readings</b> and a number means the
+            same thing every night. Rankings never change — only the scale.</p>
+            <p>Every component maps onto 0–100 before weighting:</p>
+            <ul>
+              <li><b>Search intensity</b> — Google's 0–100 index, 14-day mean. Relative to each model's own peak, so it measures <em>how hot the model is vs. itself</em>, not raw volume across models.</li>
+              <li><b>Search momentum</b> — recent 14d vs. prior 14d percent change, mapped as <code>50 + Δ% × 0.8</code>, clamped to [0, 100]. Saturates at roughly ±62%. Skipped when the prior two weeks average under 5 on Google's scale — a percent change off a baseline that thin is noise, not signal<span id="mom-missing"></span>; those models are scored on their other signals.</li>
+              <li><b>Resale premium</b> — median price ÷ retail MSRP, mapped linearly from 0.8× (→ 0) to 2.6× (→ 100). The clamp caps extreme listings; prices are decile-trimmed before the median to drop fakes and typo listings. A model with no known retail price contributes nothing (see missing signals).</li>
+              <li><b>Social buzz</b> — daily cross-platform engagement, normalized 0–100 to the model's own peak (same convention as Trends).</li>
+              <li><b>Community mood</b> — per-post transformer sentiment <code>P(pos) − P(neg)</code> ∈ [−1, 1], averaged over all scored posts, mapped to 0–100.</li>
+            </ul>
+            <p><b>Missing signals:</b> weights renormalize over whatever is present —
+            a model missing resale data is scored fairly on the rest, never
+            implicitly zeroed. <b>Update cadence:</b> search &amp; forecasts nightly
+            (stalest-first); other signals refresh whenever their source runs.
+            <b>Baseline window:</b> each model carries ~269 days of daily history.</p>
+          </div>
+          <div class="tm-col">
+            <h4>Worked example — today's #1</h4>
+            <div id="worked-example"><!-- filled by JS with live numbers --></div>
+          </div>
+        </div>
+      </details>
+
+      <div class="limits reveal">
+        <h4>What the score can't see (yet)</h4>
+        <ul>
+          <li>Resale uses <b>asking prices</b> on eBay, not final sale prices —
+            sold-price data is only available through paid partnerships.</li>
+          <li>Google search numbers show how hot a shoe is <b>compared with its
+            own history</b>, not how many people search in total.</li>
+          <li>Mood and buzz come from YouTube, Bluesky and Mastodon. Instagram
+            and TikTok aren't included — there's no free way to get their data.</li>
+          <li>Wikipedia views, press coverage and boutique sell-outs show on each
+            shoe's page but <b>don't count toward the score</b> until we've
+            tested that they make it more accurate.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="index.html" data-page="home" aria-label="SoleSight home">
+          <svg class="brand-lockup" viewBox="10 14 286 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+            <path d="M 134 36 L 280 41 Q 287 41.5 285.5 51 L 282.5 70 Q 281.5 78 273.5 77.5 L 128 72.5 Q 120 72 121.5 62.5 L 125 43 Q 126.5 36 134 36 Z" fill="#C7F23E" opacity="0.92"/>
+            <text x="20" y="76" font-family="Instrument Serif, Georgia, serif" font-size="76" fill="#16150F">Sole<tspan font-style="italic">Sight</tspan></text>
+          </svg>
+        </a>
+        <p>The sneaker hype index. Every model ranked each morning from resale,
+          search, social and boutique data.</p>
+      </div>
+      <div class="footer-col"><span class="footer-h">Explore</span>
+        <a href="hype-index.html" data-page="hype-index">The index</a>
+        <a href="movers.html" data-page="movers">Movers</a>
+        <a href="radar.html" data-page="radar">Launch radar</a>
+        <a href="market.html" data-page="market">Market</a></div>
+      <div class="footer-col"><span class="footer-h">Learn</span>
+        <a href="system.html" data-page="system">How it works</a>
+        <a href="case-study.html" data-page="case-study">Case study</a>
+        <a href="predict.html" data-page="predict">Does it predict?</a>
+        <a href="method.html" data-page="method">Method</a></div>
+      <div class="footer-col"><span class="footer-h">Follow</span>
+        <a href="boutiques.html" data-page="boutiques">For boutiques</a>
+        <a href="drops.html" data-page="drops">Release calendar</a>
+        <a href="https://www.instagram.com/solesight_/" target="_blank" rel="noopener">Instagram — @solesight_</a></div>
+    </div>
+    <div class="footer-base">
+      <span>&copy; 2026 SoleSight · Built by Jairaj Narang</span>
+      <span id="footer-updated">Updated nightly</span>
+      <span>Not affiliated with any brand or marketplace</span>
+    </div>
+  </footer>
+
+  <!-- ───────────────── detail overlay ───────────────── -->
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
+    aria-labelledby="sheet-title" tabindex="-1"></aside>
+
+  <script src="app.js?v=54"></script>
+  <script src="boutique.js?v=7"></script>
+  <script src="ask.js?v=2"></script>
+</body>
+</html>

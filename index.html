@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=49" />
+  <link rel="stylesheet" href="styles.css?v=52" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -32,6 +32,7 @@
     <nav class="nav-links">
       <a href="hype-index.html" data-page="hype-index">Index</a>
       <a href="movers.html" data-page="movers">Movers</a>
+      <a href="drops.html" data-page="drops">Drops</a>
       <a href="radar.html" data-page="radar">Radar</a>
       <a href="market.html" data-page="market">Market</a>
       <a href="system.html" data-page="system">How it works</a>
@@ -64,6 +65,12 @@
 
     <!-- #1 tonight, with the 360° spin when we have the frames -->
     <section class="home-feature" id="hero-feature" data-page="home"></section>
+
+    <section class="home-drops empty" id="home-drops" data-page="home">
+      <div class="home-sec-head"><h2 class="home-h2">Dropping soon</h2>
+        <a class="home-sec-meta" href="drops.html" data-page="drops">Full calendar →</a></div>
+      <div class="hd-list" id="hd-list"></div>
+    </section>
 
     <section class="home-brands" data-page="home">
       <div class="home-sec-head"><h2 class="home-h2">Browse by brand</h2>
@@ -136,6 +143,24 @@
     <section class="case" id="case" data-page="case-study">
       <h2 class="section-title">Case study: one shoe's climb</h2>
       <div class="case-body" id="case-body"><!-- filled by JS from stored data --></div>
+    </section>
+
+    <!-- ───────────── release calendar ───────────── -->
+    <section class="drops" id="drops" data-page="drops">
+      <h2 class="section-title">Release calendar</h2>
+      <p class="section-sub ms-lede">Upcoming sneaker drops, collected every night from the
+        sneaker press. Dates and prices are as reported — releases slip, so check the
+        retailer before you plan around one.</p>
+      <div class="dr-controls">
+        <div class="seg" id="dr-when">
+          <button data-when="all" class="on">All upcoming</button>
+          <button data-when="week">Next 7 days</button>
+          <button data-when="month">Next 30 days</button>
+        </div>
+        <select id="dr-brand" aria-label="Brand"></select>
+      </div>
+      <p class="dr-model" id="dr-model"></p>
+      <div id="dr-list"></div>
     </section>
 
     <!-- ───────────── for boutiques: inventory → reorder report ───────────── -->
@@ -383,6 +408,7 @@ score = % of all recorded daily raw scores below it</pre>
         <a href="method.html" data-page="method">Method</a></div>
       <div class="footer-col"><span class="footer-h">Follow</span>
         <a href="boutiques.html" data-page="boutiques">For boutiques</a>
+        <a href="drops.html" data-page="drops">Release calendar</a>
         <a href="https://www.instagram.com/solesight_/" target="_blank" rel="noopener">Instagram — @solesight_</a></div>
     </div>
     <div class="footer-base">
@@ -397,7 +423,7 @@ score = % of all recorded daily raw scores below it</pre>
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=52"></script>
+  <script src="app.js?v=55"></script>
   <script src="boutique.js?v=7"></script>
   <script src="ask.js?v=2"></script>
 </body>

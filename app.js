@@ -13,6 +13,7 @@ const PAGE_TITLES = {
   "hype-index": "The Index — SoleSight",
   movers: "Movers — SoleSight",
   boutiques: "For boutiques — SoleSight",
+  drops: "Release calendar — SoleSight",
   radar: "Launch Radar — SoleSight",
   market: "Market — SoleSight",
   "case-study": "Case Study — SoleSight",
@@ -117,6 +118,8 @@ async function init() {
   wireControls();
   wireReveal();
   wireSheet();
+  renderDrops();
+  renderHomeDrops();
   if (typeof initBoutique === "function") initBoutique();
   window.scrollTo(0, 0);
 
@@ -1050,6 +1053,9 @@ function openSheet(slug, opts) {
     <button class="sheet-close" aria-label="Close">×</button>
     <div class="sheet-eyebrow">Rank #${m.rank} · ${esc(m.brand)} ${stageBadge(m.stage)} ${pendingBadge(m)}</div>
     <h2 class="sheet-title" id="sheet-title">${esc(m.name)}</h2>
+    ${m.upcoming_release ? `<p class="sheet-drop">${m.upcoming_release.name !== m.name ? `New colorway: <b>${esc(m.upcoming_release.name)}</b>` : "<b>Releasing</b>"}
+      ${dropWhen(m.upcoming_release)}${m.upcoming_release.price ? ` · $${m.upcoming_release.price} retail` : ""}
+      <span>as reported</span></p>` : ""}
     <div class="sheet-hype"><b>${m.hype ?? "—"}</b><span class="of">/ 100 hype</span>
       <span class="delta ${deltaClass(m.momentum)}" style="margin-left:auto">${arrow(m.momentum)} ${fmtSigned(m.momentum, "%")} search</span></div>
     <div class="sheet-photo">${m.has_360 ? `<div class="spin360" id="sheet-360">${img(m, "")}<span class="spin-hint">↻ 360° · drag to spin</span></div>` : img(m, "")}</div>
@@ -1358,4 +1364,82 @@ function resaleChart(m) {
     ${endLabel(ebPts, eb, "var(--ebay)", ebDy)}
     ${endLabel(sxPts, sx, "var(--stockx)", sxDy)}
   </svg>`;
+}
+
+/* ---------------- release calendar ---------------- */
+const DR_WEEKDAY = { weekday: "short" }, DR_MD = { month: "short", day: "numeric" };
+const drDate = (iso) => new Date(iso + "T12:00:00");
+function dropWhen(e) {
+  const d = drDate(e.date);
+  return e.precision === "month"
+    ? d.toLocaleDateString("en-US", { month: "long", year: "numeric" }) + " (date TBA)"
+    : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+const drDays = (iso) => Math.round((drDate(iso) - drDate(new Date().toISOString().slice(0, 10))) / 864e5);
+function dropRow(e) {
+  const m = e.slug && DATA.models.find((x) => x.slug === e.slug);
+  const d = drDate(e.date), soon = e.precision === "day" && drDays(e.date) >= 0 && drDays(e.date) <= 7;
+  const outlets = e.links.map((l) => `<a href="${l.url}" target="_blank" rel="noopener">${esc(l.source)}</a>`);
+  return `<div class="dr-row">
+    <div class="dr-date${soon ? " soon" : ""}">${e.precision === "month"
+      ? `<span>${d.toLocaleDateString("en-US", { month: "short" })}</span><b>TBA</b>`
+      : `<span>${d.toLocaleDateString("en-US", DR_WEEKDAY)}</span><b>${d.getDate()}</b><span>${d.toLocaleDateString("en-US", { month: "short" })}</span>`}</div>
+    <div class="dr-main">
+      <div class="dr-name">${esc(e.name)}</div>
+      ${e.predicted_resale ? `<div class="dr-pred">Predicted release-week resale <b>$${e.predicted_resale.low}–$${e.predicted_resale.high}</b></div>` : ""}
+      <div class="dr-meta">${esc(e.brand)}${e.price ? ` · <b>$${e.price}</b> retail` : " · price not announced"}
+        · reported by ${outlets.slice(0, 3).join(", ")}${outlets.length > 3 ? ` +${outlets.length - 3}` : ""}</div>
+    </div>
+    ${m ? `<button class="dr-idx" data-slug="${m.slug}">${m.name === e.name ? "" : esc(m.name) + " · "}Hype ${m.hype ?? "—"} →</button>` : ""}
+  </div>`;
+}
+let DR_WHEN = "all";
+function renderDrops() {
+  const box = $("#dr-list");
+  if (!box) return;
+  const all = DATA.releases || [];
+  const sel = $("#dr-brand");
+  if (sel && !sel.options.length) {
+    const brands = [...new Set(all.map((e) => e.brand))].sort((a, b) => a.localeCompare(b));
+    sel.innerHTML = `<option value="">All brands</option>` + brands.map((b) => `<option>${esc(b)}</option>`).join("");
+    sel.onchange = renderDrops;
+    $$("#dr-when button").forEach((b) => (b.onclick = () => {
+      DR_WHEN = b.dataset.when;
+      $$("#dr-when button").forEach((x) => x.classList.toggle("on", x === b));
+      renderDrops();
+    }));
+  }
+  const dm = DATA.drop_model, dmEl = $("#dr-model");
+  if (dm && dmEl) dmEl.innerHTML = dm.ready
+    ? `Predicted resale is shown as a range. The model is tested on ${dm.graded} past drops (error ${Math.round(dm.improvement * 100)}% lower than a simple guess)${dm.track_record ? `; ${dm.track_record.hits} of ${dm.track_record.graded} frozen predictions landed in range` : ""}.`
+    : `<b>Resale predictions: collecting data.</b> We record every drop's eBay prices from release week on, and predictions
+       switch on once the model has been tested on ${dm.needed} released drops and clearly beats a simple guess
+       (${dm.graded} of ${dm.needed} so far · ${dm.tracked} drops tracked).`;
+  const brand = sel ? sel.value : "";
+  const horizon = { all: 1e9, week: 7, month: 30 }[DR_WHEN];
+  const list = all.filter((e) => !brand || e.brand === brand);
+  const past = list.filter((e) => e.precision === "day" && drDays(e.date) < 0);
+  const up = list.filter((e) => !(e.precision === "day" && drDays(e.date) < 0) && drDays(e.date) <= horizon);
+  if (!list.length) { box.innerHTML = `<p class="bq-empty">No drops found yet — the calendar fills in nightly.</p>`; return; }
+  const groups = {};
+  up.forEach((e) => {
+    const k = e.precision === "month" ? drDate(e.date).toLocaleDateString("en-US", { month: "long", year: "numeric" }) + " · date TBA"
+      : drDays(e.date) <= 0 ? "Today" : drDays(e.date) <= 7 ? "This week" : drDate(e.date).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    (groups[k] = groups[k] || []).push(e);
+  });
+  box.innerHTML = Object.entries(groups).map(([k, es]) =>
+      `<h3 class="dr-h">${esc(k)}<small>${es.length} drop${es.length === 1 ? "" : "s"}</small></h3>${es.map(dropRow).join("")}`).join("")
+    + (past.length && DR_WHEN === "all" ? `<h3 class="dr-h">Just dropped<small>last 7 days</small></h3>${past.slice().reverse().map(dropRow).join("")}` : "")
+    + (!up.length ? `<p class="bq-empty">Nothing in this window yet.</p>` : "");
+  $$("#dr-list .dr-idx").forEach((b) => (b.onclick = () => openSheet(b.dataset.slug)));
+}
+function renderHomeDrops() {
+  const sec = $("#home-drops");
+  if (!sec) return;
+  const next = (DATA.releases || []).filter((e) => e.precision === "day" && drDays(e.date) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || b.outlets - a.outlets).slice(0, 5);
+  if (!next.length) return;
+  sec.classList.remove("empty");
+  $("#hd-list").innerHTML = next.map(dropRow).join("");
+  $$("#hd-list .dr-idx").forEach((b) => (b.onclick = () => openSheet(b.dataset.slug)));
 }
