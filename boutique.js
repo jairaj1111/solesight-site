@@ -187,7 +187,7 @@ function bqCompetitors(m, myStore) {
 }
 
 /* ---------- report ---------- */
-let BQ_LAST = null, BQ_ROWS = null;
+let BQ_LAST = null, BQ_ROWS = null, BQ_TEXT = null, BQ_FILENAME = null;
 function bqAnalyze(rows, myStore) {
   const index = DATA.models.map((m) => ({ m, sku: m.sku ? bqNorm(m.sku) : null, tok: bqTokens(m.name) }));
   const global = bqGlobalCurve();
@@ -258,7 +258,8 @@ function bqRender(rep) {
       <div class="bq-thumb tile" data-slug="${e.m.slug}">${img(e.m, "")}</div>
       <div class="bq-main">
         <div class="bq-top"><span class="bq-badge ${e.verdict.key}">${e.verdict.label}</span>
-          <span class="bq-why">${esc(e.verdict.why)}</span></div>
+          <span class="bq-why">${esc(e.verdict.why)}</span>
+          <button class="bq-buybtn" data-buy="${e.m.slug}" type="button">Buy prices →</button></div>
         <h4 class="bq-name" data-slug="${e.m.slug}">${esc(e.m.name)}</h4>
         <div class="bq-meta">${e.units} pairs in stock · matched by ${e.how}${e.sold != null ? ` · ${e.sold} sold` : ""}${e.m.resale_premium ? ` · resells at ${e.m.resale_premium.toFixed(1)}× retail` : ""}</div>
         ${e.sizes.length ? `<div class="bq-sizes">${e.sizes.map((s) => `
@@ -293,6 +294,7 @@ function bqRender(rep) {
       <p class="bq-fine">We don't score these yet — tell us which matter and we'll add them.</p>
       <ul class="bq-untracked">${rep.untracked.slice(0, 40).map(([t, q]) => `<li>${esc(t)}<span>${q} pairs</span></li>`).join("")}</ul>` : ""}`;
   $$("#bq-out [data-slug]").forEach((x) => (x.onclick = () => openSheet(x.dataset.slug)));
+  $$("#bq-out [data-buy]").forEach((x) => (x.onclick = () => bcOpen(x.dataset.buy)));
   $("#bq-dl").onclick = bqDownload;
   $("#bq-pdf").onclick = bqPrint;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -354,7 +356,7 @@ function bqOverview(rep) {
    (see "@media print" in styles.css). Crisp text, nothing uploaded, works on
    desktop and iOS. Competitor tables are expanded for the printout. */
 function bqPrintHead() {
-  const store = BQ_LAST && BQ_LAST.myStore ? bqStoreName(BQ_LAST.myStore) : "Your store";
+  const store = window.BQ_STORE_NAME || (BQ_LAST && BQ_LAST.myStore ? bqStoreName(BQ_LAST.myStore) : "Your store");
   const when = new Date(DATA.generated_at * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   let head = $("#bq-print-head");
   if (!head) {
@@ -435,12 +437,139 @@ function bqDownload() {
 }
 
 function bqRerender() { if (BQ_ROWS) bqRender(bqAnalyze(BQ_ROWS, ($("#bq-store") || {}).value || "")); }
-function bqLoadText(text) { BQ_ROWS = bqRows(bqParseCSV(text)); bqRerender(); }
+function bqLoadText(text) { BQ_TEXT = text; BQ_ROWS = bqRows(bqParseCSV(text)); bqRerender(); }
+
+/* Weekly email mode: scripts/weekly_reports.py opens
+   boutiques.html?weekly=<csv path>&store=<domain> headlessly, prints it to PDF
+   and reads the summary this writes into #bq-summary. */
+function bqSummary() {
+  const r = BQ_LAST;
+  if (!r) return null;
+  const reorder = r.out.filter((e) => e.verdict.key === "reorder");
+  return {
+    shoes: r.out.length, reorder: reorder.length,
+    restock_sizes: r.out.reduce((a, e) => a + e.sizes.filter((z) => z.verdict === "restock").length + e.missingSizes.length, 0),
+    dont_reorder: r.out.filter((e) => e.verdict.key === "hold-off" || e.verdict.key === "markdown").length,
+    top_reorder: reorder.slice(0, 3).map((e) => e.m.name),
+    hot_missing: r.missing.slice(0, 3).map((m) => m.name),
+  };
+}
+async function bqWeeklyMode() {
+  const q = new URLSearchParams(location.search);
+  const path = q.get("weekly");
+  if (!path) return;
+  const pick = $("#bq-store");
+  if (pick && q.get("store")) pick.value = q.get("store");
+  if (q.get("name")) window.BQ_STORE_NAME = q.get("name");
+  const text = await fetch(path).then((r) => r.text());
+  bqLoadText(text);
+  bqBeforePrint();
+  const out = document.createElement("script");
+  out.type = "application/json"; out.id = "bq-summary";
+  out.textContent = JSON.stringify(bqSummary());
+  document.body.appendChild(out);
+}
+
+/* ---------- buy-price calculator ----------
+   pay at most = sells for x (1 - fees - margin), per size, where
+   sells for = median eBay ask for that size + condition x "% of ask you expect",
+   lowered to the 30-day forecast when prices are expected to fall. */
+const bcMedian = (xs) => { const v = [...xs].sort((a, b) => a - b); const n = v.length;
+  return n ? (n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2) : null; };
+function bcAsks(m, cond) {
+  const by = {};
+  (m.size_sources || []).filter((s) => s.kind === "resale" && s.condition === cond)
+    .forEach((s) => s.sizes.forEach((z) => {
+      const k = bqSize(z.size);
+      if (k && z.price) (by[k] = by[k] || []).push(z.price);
+    }));
+  return by;
+}
+const BC_KEYS = ["fee", "margin", "real"];
+const BC_MIN_SIZE_LISTINGS = 3;
+function bcSettings() {
+  const num = (id, d) => { const v = parseFloat($("#bc-" + id).value); return isNaN(v) ? d : v; };
+  const st = { fee: num("fee", 3) / 100, margin: num("margin", 25) / 100, real: num("real", 90) / 100,
+               cond: $("#bc-cond").value, outlook: $("#bc-outlook").checked };
+  try { localStorage.setItem("bc-settings", JSON.stringify(BC_KEYS.reduce((o, k) => ({ ...o, [k]: $("#bc-" + k).value }), {}))); } catch (_) {}
+  return st;
+}
+function bcCompute(m, st) {
+  // per-size medians over every distinct listing in the last 14 days (size_asks);
+  // older data files only had the cheapest listing per size (size_sources)
+  const stats = (m.size_asks || {})[st.cond];
+  const asks = stats ? Object.fromEntries(Object.entries(stats).map(([k, v]) => [bqSize(k), v]).filter(([k]) => k))
+    : Object.fromEntries(Object.entries(bcAsks(m, st.cond)).map(([k, v]) => [k, { median: bcMedian(v), n: v.length }]));
+  const n = Object.values(asks).reduce((a, v) => a + v.n, 0);
+  const pooled = bcMedian(Object.values(asks).map((v) => v.median));
+  const shoeAsk = st.cond === "Deadstock" ? (m.resale_last || pooled) : pooled;
+  const o = m.price_outlook;
+  const trend = st.outlook && o && o.ok && o.change_pct < 0 ? 1 + o.change_pct / 100 : 1;
+  const row = (ask) => {
+    const sells = ask * st.real * trend;
+    return { ask, sells, pay: Math.max(0, Math.floor(sells * (1 - st.fee - st.margin) / 5) * 5) };
+  };
+  // a size gets its own price only with >=3 listings; one optimistic ask
+  // shouldn't make a shop overpay. Otherwise it uses the typical-pair price.
+  const sizes = Object.keys(asks).sort((a, b) => a - b).map((sz) => {
+    const own = asks[sz].n >= BC_MIN_SIZE_LISTINGS;
+    return { size: sz, n: asks[sz].n, own, ...row(own ? asks[sz].median : shoeAsk) };
+  });
+  return { sizes, shoe: shoeAsk ? row(shoeAsk) : null, trend, n };
+}
+function bcRender() {
+  const out = $("#bc-out");
+  if (!out) return;
+  const name = $("#bc-shoe").value.trim().toLowerCase();
+  const m = DATA.models.find((x) => x.name.toLowerCase() === name);
+  if (!m) { out.innerHTML = name ? `<p class="bq-fine">Pick a shoe from the list.</p>` : ""; return; }
+  const st = bcSettings();
+  const r = bcCompute(m, st);
+  if (!r.shoe) { out.innerHTML = `<p class="bq-empty">No ${st.cond === "Used" ? "used" : "new"} eBay asks for this shoe right now.</p>`; return; }
+  const $$$ = (v) => "$" + Math.round(v);
+  out.innerHTML = `
+    <div class="bc-head"><div class="tile" data-slug="${m.slug}">${img(m, "")}</div>
+      <div><b>${esc(m.name)}</b>
+        <span>Typical ${st.cond === "Used" ? "used" : "new"} pair: pay at most <em>${$$$(r.shoe.pay)}</em>
+          · sells for about ${$$$(r.shoe.sells)}${m.retail ? ` · retail $${m.retail}` : ""}</span>
+        ${r.trend < 1 ? `<span class="bc-note">Prices lowered ${Math.round((1 - r.trend) * 100)}% — the 30-day forecast expects them to fall.</span>` : ""}</div></div>
+    ${r.sizes.some((z) => z.own) ? `<table class="bq-table bc-table"><thead><tr><th>Size</th><th class="num">eBay ask</th>
+      <th class="num">Listings</th><th class="num">Sells for</th><th class="num">Pay at most</th></tr></thead><tbody>
+      ${r.sizes.map((z) => `<tr${z.own ? "" : ' class="thin"'}><td>${z.size}</td><td class="num">${z.own ? $$$(z.ask) : "typical"}</td>
+        <td class="num">${z.n}</td><td class="num">${$$$(z.sells)}</td>
+        <td class="num"><b>${$$$(z.pay)}</b></td></tr>`).join("")}</tbody></table>`
+      : `<p class="bq-fine">Not enough listings per size yet to price sizes separately — the typical-pair
+        price above applies to every size.</p>`}
+    <p class="bq-fine">From ${r.n} current eBay ${st.cond === "Used" ? "used" : "new"} listings (asking prices, not completed sales).
+      A size gets its own price only with ${BC_MIN_SIZE_LISTINGS}+ listings; otherwise it uses the typical-pair price
+      (greyed out). Always check the pair is authentic.</p>`;
+  $$("#bc-out [data-slug]").forEach((x) => (x.onclick = () => openSheet(x.dataset.slug)));
+}
+function bcOpen(slug) {
+  const m = DATA.models.find((x) => x.slug === slug);
+  if (!m) return;
+  $("#bc-shoe").value = m.name;
+  bcRender();
+  $("#bc").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function initBuyCalc() {
+  if (!$("#bc")) return;
+  $("#bc-shoes").innerHTML = DATA.models.map((m) => `<option value="${esc(m.name)}"></option>`).join("");
+  try {
+    const saved = JSON.parse(localStorage.getItem("bc-settings") || "{}");
+    BC_KEYS.forEach((k) => { if (saved[k] != null) $("#bc-" + k).value = saved[k]; });
+  } catch (_) {}
+  ["bc-shoe", "bc-cond", "bc-fee", "bc-margin", "bc-real", "bc-outlook"].forEach((id) => {
+    $("#" + id).addEventListener("input", bcRender);
+    $("#" + id).addEventListener("change", bcRender);
+  });
+}
 
 function initBoutique() {
+  initBuyCalc();
   const drop = $("#bq-drop"), file = $("#bq-file");
   if (!drop || !file) return;
-  const read = (f) => { if (f) f.text().then(bqLoadText); };
+  const read = (f) => { if (f) { BQ_FILENAME = f.name; f.text().then(bqLoadText); } };
   const pick = $("#bq-store");
   if (pick) {
     const stores = new Set();
@@ -454,5 +583,6 @@ function initBoutique() {
   ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
   ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", (e) => read(e.dataTransfer.files[0]));
-  $("#bq-sample").onclick = () => fetch("sample-inventory.csv").then((r) => r.text()).then(bqLoadText);
+  $("#bq-sample").onclick = () => fetch("sample-inventory.csv").then((r) => r.text()).then((t) => { BQ_FILENAME = "sample-inventory.csv"; bqLoadText(t); });
+  bqWeeklyMode();
 }

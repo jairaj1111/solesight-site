@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=52" />
+  <link rel="stylesheet" href="styles.css?v=54" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -169,6 +169,31 @@
       <p class="section-sub ms-lede">Upload your inventory and see what to reorder tonight —
         which shoes, which sizes, which colorways, what competitors charge and where resale
         prices are heading — scored against the whole market.</p>
+      <div class="acct" id="acct" hidden>
+        <div id="acct-out">
+          <b>Save your store and get this report every Monday</b>
+          <div class="acct-row"><input type="email" id="acct-login" placeholder="you@yourstore.com" autocomplete="email" />
+            <button class="btn btn-solid" id="acct-send" type="button">Email me a sign-in link</button></div>
+          <small>No password — we email you a link. Optional: without an account, your file never leaves your browser.</small>
+        </div>
+        <div id="acct-in" hidden>
+          <div class="acct-top"><b>Your store</b><span>Signed in as <span id="acct-who"></span> ·
+            <button class="acct-link" id="acct-signout" type="button">Sign out</button></span></div>
+          <div class="acct-grid">
+            <label>Store name <input id="acct-name" placeholder="e.g. Laced Up" /></label>
+            <label>Send Monday's report to <input type="email" id="acct-email" /></label>
+            <label class="acct-check"><input type="checkbox" id="acct-weekly" /> Email me the reorder report every Monday</label>
+          </div>
+          <div class="acct-row">
+            <button class="btn btn-ghost" id="acct-save" type="button">Save settings</button>
+            <button class="btn btn-solid" id="acct-saveinv" type="button">Save loaded inventory to my account</button>
+            <button class="btn btn-ghost" id="acct-load" type="button" hidden>Load my saved inventory</button>
+          </div>
+          <small id="acct-last"></small>
+        </div>
+        <p class="acct-msg" id="acct-msg"></p>
+      </div>
+
       <label class="bq-drop" id="bq-drop">
         <input type="file" id="bq-file" accept=".csv,text/csv" />
         <b>Drop your inventory CSV here</b>
@@ -194,6 +219,28 @@
           SoleSight tracks, refreshed nightly.</p>
       </details>
       <div id="bq-out"></div>
+
+      <div class="bc" id="bc">
+        <h3 class="bq-h">Buy-price calculator</h3>
+        <p class="bq-fine">What to pay a seller for a pair, by size: what that size sells for on eBay,
+          minus your fees and the margin you want. Built for consignment and resale shops.</p>
+        <div class="bc-form">
+          <label class="bc-shoe">Shoe
+            <input id="bc-shoe" list="bc-shoes" placeholder="Start typing — e.g. Kobe 6 Grinch" autocomplete="off" />
+            <datalist id="bc-shoes"></datalist></label>
+          <label>Condition
+            <select id="bc-cond"><option value="Deadstock">New (deadstock)</option><option value="Used">Used</option></select></label>
+          <label>Your selling fees <span><input id="bc-fee" type="number" min="0" max="40" step="0.5" value="3" />%</span>
+            <small>~3% in store (card fees); online marketplaces often 10–15% — check yours</small></label>
+          <label>Margin you want <span><input id="bc-margin" type="number" min="0" max="80" step="1" value="25" />%</span>
+            <small>of the sale price</small></label>
+          <label>You expect to sell at <span><input id="bc-real" type="number" min="50" max="110" step="1" value="90" />%</span>
+            <small>of the eBay ask — asks run above what pairs actually sell for</small></label>
+          <label class="bc-check"><input id="bc-outlook" type="checkbox" checked />
+            Use the 30-day forecast when prices are expected to fall</label>
+        </div>
+        <div id="bc-out"></div>
+      </div>
     </section>
 
     <!-- ───────────── does it predict? (backtest) ───────────── -->
@@ -424,7 +471,9 @@ score = % of all recorded daily raw scores below it</pre>
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
   <script src="app.js?v=55"></script>
-  <script src="boutique.js?v=7"></script>
+  <script src="config.js?v=1"></script>
+  <script src="boutique.js?v=12"></script>
+  <script src="account.js?v=1"></script>
   <script src="ask.js?v=2"></script>
 </body>
 </html>

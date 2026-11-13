@@ -1558,3 +1558,57 @@ html, body { overflow-x: hidden; }
 .dr-model b { color: var(--ink); }
 .dr-pred { font-size: .84rem; margin-top: 3px; }
 .dr-pred b { background: var(--acid); padding: 0 4px; }
+
+/* buy-price calculator */
+.bc { margin-top: 46px; border-top: 1px solid var(--ink); }
+.bc .bq-h { margin-top: 22px; }
+.bc-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; margin: 16px 0 6px; }
+.bc-form label { display: flex; flex-direction: column; gap: 6px; font-size: .78rem; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-3); }
+.bc-form label span { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; color: var(--ink); font-size: .95rem; }
+.bc-form small { text-transform: none; letter-spacing: 0; font-size: .76rem; color: var(--ink-3); }
+.bc-form input, .bc-form select { font: inherit; font-size: .95rem; text-transform: none; letter-spacing: 0; color: var(--ink);
+  padding: 9px 10px; border: 1px solid var(--line-2); border-radius: 2px; background: #fff; min-width: 0; }
+.bc-form input[type=number] { width: 84px; }
+.bc-shoe { grid-column: span 2; }
+.bc-check { flex-direction: row !important; align-items: center; text-transform: none !important; letter-spacing: 0 !important;
+  font-size: .88rem !important; color: var(--ink-2) !important; grid-column: span 3; }
+.bc-check input { width: auto; }
+.bc-head { display: grid; grid-template-columns: 120px 1fr; gap: 18px; align-items: center; margin: 18px 0 12px; }
+.bc-head .tile { aspect-ratio: 1.2 / 1; cursor: pointer; }
+.bc-head .tile img { width: 84%; height: auto; }
+.bc-head b { display: block; font-size: 1.15rem; font-weight: 600; letter-spacing: -.02em; }
+.bc-head span { display: block; font-size: .9rem; color: var(--ink-2); margin-top: 4px; }
+.bc-head em { font-style: normal; font-weight: 600; color: var(--ink); background: var(--acid); padding: 0 4px; }
+.bc-note { color: #8A2C1F !important; font-size: .82rem !important; }
+.bc-table { border: 1px solid var(--line); }
+.bc-table tr.thin td { color: var(--ink-3); }
+.bq-buybtn { margin-left: auto; font: inherit; font-size: .74rem; font-weight: 500; padding: 4px 9px;
+  border: 1px solid var(--ink); background: #fff; cursor: pointer; border-radius: 2px; }
+.bq-buybtn:hover { background: var(--ink); color: #fff; }
+@media (max-width: 760px) {
+  .bc-form { grid-template-columns: 1fr 1fr; }
+  .bc-shoe, .bc-check { grid-column: 1 / -1; }
+  .bc-head { grid-template-columns: 90px 1fr; }
+}
+@media print { body.printing-bq .bc, body.printing-bq .bq-buybtn { display: none !important; } }
+
+/* store accounts */
+.acct { margin-top: 24px; padding: 18px 20px; border: 1px solid var(--ink); background: #fff; }
+.acct b { font-weight: 600; font-size: 1.02rem; letter-spacing: -.01em; }
+.acct small { display: block; color: var(--ink-3); font-size: .8rem; margin-top: 8px; }
+.acct-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.acct-row input { flex: 1 1 240px; font: inherit; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 2px; }
+.acct-top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.acct-top span { font-size: .84rem; color: var(--ink-3); }
+.acct-link { font: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; color: var(--ink-2); }
+.acct-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; margin-top: 12px; }
+.acct-grid label { display: flex; flex-direction: column; gap: 6px; font-size: .76rem; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+.acct-grid input:not([type=checkbox]) { font: inherit; font-size: .95rem; text-transform: none; letter-spacing: 0; padding: 9px 10px;
+  border: 1px solid var(--line-2); border-radius: 2px; color: var(--ink); }
+.acct-check { flex-direction: row !important; align-items: center; grid-column: 1 / -1; text-transform: none !important;
+  letter-spacing: 0 !important; font-size: .9rem !important; color: var(--ink-2) !important; }
+.acct-msg { margin: 10px 0 0; font-size: .86rem; color: var(--pos, #2f6b1f); min-height: 1em; }
+.acct-msg.bad { color: #8A2C1F; }
+@media (max-width: 760px) { .acct-grid { grid-template-columns: 1fr; } }
+@media print { body.printing-bq .acct { display: none !important; } }
