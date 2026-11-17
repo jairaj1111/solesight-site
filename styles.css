@@ -1499,10 +1499,17 @@ html, body { overflow-x: hidden; }
     padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1.5px solid var(--ink); }
   body.printing-bq #bq-print-head .brand-lockup { height: 30px; }
   body.printing-bq #bq-print-head b { display: block; font-size: 15pt; font-weight: 600; letter-spacing: -.02em; }
-  body.printing-bq #bq-print-head span { font-size: 9pt; color: var(--ink-3); }
-  body.printing-bq .bq-shoe, body.printing-bq .bq-comp, body.printing-bq .bq-outlook,
-  body.printing-bq .bq-summary, body.printing-bq tr { break-inside: avoid; }
+  body.printing-bq #bq-print-head span { display: block; font-size: 9pt; color: var(--ink-3); margin-top: 2px; max-width: 150mm; }
+  /* cards may split across pages (whole-card "avoid" left half of every page blank);
+     the pieces inside them stay whole */
+  body.printing-bq .bq-outlook, body.printing-bq .bq-summary, body.printing-bq tr,
+  body.printing-bq .bq-sizes, body.printing-bq .bq-note, body.printing-bq .bq-comp summary,
+  body.printing-bq .bq-thumb { break-inside: avoid; }
+  body.printing-bq .bq-top, body.printing-bq .bq-name, body.printing-bq .bq-meta,
+  body.printing-bq .bq-comp summary, body.printing-bq .bq-table thead { break-after: avoid; }
   body.printing-bq .bq-h { break-after: avoid; margin-top: 22px; }
+  /* page 1 = summary + competitors; shoe-by-shoe starts on its own page */
+  body.printing-bq .bq-h:has(+ .bq-list) { break-before: page; margin-top: 0; }
   body.printing-bq .bq-shoe { grid-template-columns: 110px 1fr; gap: 16px; padding: 12px 0; }
   body.printing-bq .bq-comp summary { list-style: none; }
   body.printing-bq .bq-comp summary::-webkit-details-marker { display: none; }

@@ -151,12 +151,15 @@ function bqShoeVerdict(m, units) {
   if (h >= 70 || (BQ_HOT.has(m.stage) && h >= 50))
     return { key: "reorder", label: "Reorder", why: `Hype ${h}${m.stage ? `, ${m.stage}` : ""}${m.hype_delta_7d ? `, ${fmtSigned(m.hype_delta_7d, "")} this week` : ""}` };
   if (h < 40 || (m.stage === "cooling" && h < 60))
-    return { key: units >= 10 ? "markdown" : "hold-off", label: units >= 10 ? "Consider a markdown" : "Don't reorder",
+    return { key: units >= 10 && !window.BQ_PUBLIC ? "markdown" : "hold-off",
+             label: units >= 10 && !window.BQ_PUBLIC ? "Consider a markdown" : "Don't reorder",
              why: `Hype ${h}${m.stage ? `, ${m.stage}` : ""} — sell through what you have` };
   return { key: "hold", label: "Hold", why: `Hype ${h}, steady — keep your current depth` };
 }
 function bqSizeVerdict(shoeKey, qty, sc) {
   const hotSize = sc.score >= 0.6, coldSize = sc.score < 0.4;
+  // public-shelf report: we only know in stock (1) or sold out (0), not counts
+  if (window.BQ_PUBLIC) return shoeKey === "reorder" && hotSize && !qty ? "restock" : "ok";
   if (shoeKey === "reorder" && hotSize && (qty ?? 0) <= 1) return "restock";
   if ((qty ?? 0) >= 3 && (coldSize || shoeKey !== "reorder")) return "heavy";
   return "ok";
@@ -251,7 +254,8 @@ function bqRender(rep) {
     return;
   }
   const n = (k) => rep.out.filter((e) => e.verdict.key === k).length;
-  const restock = rep.out.reduce((a, e) => a + e.sizes.filter((s) => s.verdict === "restock").length + e.missingSizes.length, 0);
+  // public-shelf report: count sold-out sizes only (missing sizes may just be consignment gaps)
+  const restock = rep.out.reduce((a, e) => a + e.sizes.filter((s) => s.verdict === "restock").length + (window.BQ_PUBLIC ? 0 : e.missingSizes.length), 0);
   const lbl = { restock: "Restock", ok: "OK", heavy: "Heavy" };
   const cards = rep.out.map((e) => `
     <article class="bq-shoe">
@@ -261,10 +265,10 @@ function bqRender(rep) {
           <span class="bq-why">${esc(e.verdict.why)}</span>
           <button class="bq-buybtn" data-buy="${e.m.slug}" type="button">Buy prices →</button></div>
         <h4 class="bq-name" data-slug="${e.m.slug}">${esc(e.m.name)}</h4>
-        <div class="bq-meta">${e.units} pairs in stock · matched by ${e.how}${e.sold != null ? ` · ${e.sold} sold` : ""}${e.m.resale_premium ? ` · resells at ${e.m.resale_premium.toFixed(1)}× retail` : ""}</div>
+        <div class="bq-meta">${window.BQ_PUBLIC ? `${e.sizes.filter((z) => z.qty).length} of ${e.sizes.length} sizes in stock on your site` : `${e.units} pairs in stock · matched by ${e.how}`}${e.sold != null ? ` · ${e.sold} sold` : ""}${e.m.resale_premium ? ` · resells at ${e.m.resale_premium.toFixed(1)}× retail` : ""}</div>
         ${e.sizes.length ? `<div class="bq-sizes">${e.sizes.map((s) => `
           <span class="bq-size ${s.verdict}" title="Demand ${Math.round(s.score * 100)}/100 · ${s.seen ? `${s.seen} tracked store listing${s.seen === 1 ? "" : "s"}` : "market-wide size curve"}${s.ask ? ` · eBay ask $${Math.round(s.ask)}` : ""}">
-            <b>${s.size}</b><small>${s.qty} · ${lbl[s.verdict]}</small></span>`).join("")}</div>` : ""}
+            <b>${s.size}</b><small>${window.BQ_PUBLIC ? (s.qty ? "in stock" : "sold out") : s.qty} · ${lbl[s.verdict]}</small></span>`).join("")}</div>` : ""}
         ${e.missingSizes.length ? `<p class="bq-note"><b>Not stocked, but in demand:</b> sizes ${e.missingSizes.join(", ")}.</p>` : ""}
         ${bqOutlook(e)}
         ${bqCompBlock(e)}
@@ -276,14 +280,14 @@ function bqRender(rep) {
     <div class="bq-summary">
       <div><b>${rep.out.length}</b><span>Tracked shoes found</span></div>
       <div class="hl"><b>${n("reorder")}</b><span>To reorder</span></div>
-      <div><b>${restock}</b><span>Sizes to restock</span></div>
+      <div><b>${restock}</b><span>${window.BQ_PUBLIC ? "Sold-out sizes to restock" : "Sizes to restock"}</span></div>
       <div><b>${n("hold-off") + n("markdown")}</b><span>Don't reorder</span></div>
     </div>
     <div class="bq-actions"><button class="btn btn-solid" id="bq-pdf">Save as PDF</button>
       <button class="btn btn-ghost" id="bq-dl">Download as CSV</button>
       <span class="bq-fine">Based on tonight's index (${new Date(DATA.generated_at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}).
         Size advice blends the typical sneaker size curve with each shoe's own resale prices and sell-outs at
-        tracked stores — guidance, not exact quantities${rep.out.some((e) => e.sold != null) ? "" : ". Add a units-sold column to make it specific to your store"}.</span></div>
+        tracked stores — guidance, not exact quantities${rep.out.some((e) => e.sold != null) || window.BQ_PUBLIC ? "" : ". Add a units-sold column to make it specific to your store"}.</span></div>
     ${bqOverview(rep)}
     <h3 class="bq-h">Shoe by shoe</h3>
     <div class="bq-list">${cards}</div>
@@ -332,14 +336,20 @@ function bqCompBlock(e) {
   }
   const scarce = e.soldOutAt && e.units > 0
     ? `Sold out at ${e.soldOutAt} of ${e.comps.length} other store${e.comps.length === 1 ? "" : "s"} — you're one of the few with stock.` : "";
-  const rows = e.comps.map((c) => `<tr>
+  // public-shelf report (a cold-outreach PDF): the 5 most useful rows, in stock and cheapest first
+  const COMP_CAP = 5;
+  const shown = window.BQ_PUBLIC
+    ? [...e.comps].sort((a, b) => (b.left > 0) - (a.left > 0) || (b.comparable - a.comparable) || (a.price || 1e9) - (b.price || 1e9)).slice(0, COMP_CAP)
+    : e.comps;
+  const more = e.comps.length - shown.length;
+  const rows = shown.map((c) => `<tr>
       <td><a href="${c.url || `https://${c.store}`}" target="_blank" rel="noopener">${esc(c.name)} ↗</a>${c.title ? `<small class="bq-ptitle">${esc(c.title)}</small>` : ""}</td>
       <td class="num">${c.price ? "$" + Math.round(c.price) : "—"}${c.price && !c.comparable ? `<small class="bq-ptitle" title="Looks like a different listing (${c.used ? "used pair" : "price far from this shoe's usual range"}), so it's left out of price comparisons">not compared</small>` : ""}</td>
       <td>${c.left === 0 ? `<span class="bq-out">Sold out</span>` : `${c.left} of ${c.total} sizes left${c.sizes.length ? `: ${c.sizes.slice(0, 8).join(", ")}${c.sizes.length > 8 ? "…" : ""}` : ""}`}</td></tr>`).join("");
   return `<details class="bq-comp">
       <summary><b>Competitors:</b> ${e.comps.length} store${e.comps.length === 1 ? "" : "s"} carry it · ${inStock} in stock ${from ? "· " + from : ""}</summary>
       ${gap || scarce ? `<p class="bq-note">${[gap, scarce].filter(Boolean).join(" ")}</p>` : ""}
-      <table class="bq-table"><thead><tr><th>Store</th><th class="num">Price</th><th>Sizes</th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="bq-table"><thead><tr><th>Store</th><th class="num">Price</th><th>Sizes</th></tr></thead><tbody>${rows}${more > 0 ? `<tr><td colspan="3" class="bq-fine">+ ${more} more store${more === 1 ? "" : "s"} (full list at solesight.xyz/boutiques.html)</td></tr>` : ""}</tbody></table>
     </details>`;
 }
 
@@ -367,7 +377,9 @@ function bqPrintHead() {
   const logo = document.querySelector(".nav .brand-lockup");
   head.innerHTML = `${logo ? logo.outerHTML : "<b>SoleSight</b>"}
     <div><b>Reorder report · ${esc(store)}</b>
-      <span>${when} · scored against tonight's index · solesight.xyz/boutiques.html</span></div>`;
+      <span>${when} · scored against tonight's index · solesight.xyz/boutiques.html</span>
+      ${window.BQ_PUBLIC ? `<span>Built from ${esc(store)}'s public website, no inventory file: only shoes on the SoleSight index,
+        and sizes show as in stock or sold out (not pair counts). Upload your inventory at solesight.xyz/boutiques.html for the full version.</span>` : ""}</div>`;
   return `SoleSight reorder report - ${store} - ${when}`;
 }
 let BQ_OPENED = [], BQ_SWAPPED = [];
@@ -448,7 +460,7 @@ function bqSummary() {
   const reorder = r.out.filter((e) => e.verdict.key === "reorder");
   return {
     shoes: r.out.length, reorder: reorder.length,
-    restock_sizes: r.out.reduce((a, e) => a + e.sizes.filter((z) => z.verdict === "restock").length + e.missingSizes.length, 0),
+    restock_sizes: r.out.reduce((a, e) => a + e.sizes.filter((z) => z.verdict === "restock").length + (window.BQ_PUBLIC ? 0 : e.missingSizes.length), 0),
     dont_reorder: r.out.filter((e) => e.verdict.key === "hold-off" || e.verdict.key === "markdown").length,
     top_reorder: reorder.slice(0, 3).map((e) => e.m.name),
     hot_missing: r.missing.slice(0, 3).map((m) => m.name),
@@ -461,6 +473,7 @@ async function bqWeeklyMode() {
   const pick = $("#bq-store");
   if (pick && q.get("store")) pick.value = q.get("store");
   if (q.get("name")) window.BQ_STORE_NAME = q.get("name");
+  if (q.get("public")) window.BQ_PUBLIC = true;
   const text = await fetch(path).then((r) => r.text());
   bqLoadText(text);
   bqBeforePrint();
