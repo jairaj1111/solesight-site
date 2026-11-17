@@ -498,15 +498,27 @@ function bcAsks(m, cond) {
     }));
   return by;
 }
-const BC_KEYS = ["fee", "margin", "real"];
+const BC_KEYS = ["fee", "margin", "real", "src"];
 const BC_MIN_SIZE_LISTINGS = 3;
 function bcSettings() {
   const num = (id, d) => { const v = parseFloat($("#bc-" + id).value); return isNaN(v) ? d : v; };
   const st = { fee: num("fee", 3) / 100, margin: num("margin", 25) / 100, real: num("real", 90) / 100,
-               cond: $("#bc-cond").value, outlook: $("#bc-outlook").checked };
-  try { localStorage.setItem("bc-settings", JSON.stringify(BC_KEYS.reduce((o, k) => ({ ...o, [k]: $("#bc-" + k).value }), {}))); } catch (_) {}
+               cond: $("#bc-cond").value, outlook: $("#bc-outlook").checked, src: ($("#bc-src") || {}).value || "ebay" };
+  try { localStorage.setItem("bc-settings", JSON.stringify(BC_KEYS.reduce((o, k) => ({ ...o, [k]: ($("#bc-" + k) || {}).value }), {}))); } catch (_) {}
   return st;
 }
+// Stadium Goods (new pairs only): lowest ask per in-stock size, from its public store data
+function bcMarket(m, st) {
+  const sg = (m.marketplaces || {}).stadiumgoods;
+  if (!sg || st.cond !== "Deadstock") return null;
+  const sizes = {}, outliers = {};
+  Object.entries(sg.sizes || {}).forEach(([k, v]) => { const z = bqSize(k); if (z && +z >= 3.5 && +z <= 18) sizes[z] = v; });
+  // one consignor asking $992 when the other sizes sit at $269 isn't a price to pay off
+  const mid = bcMedian(Object.values(sizes));
+  Object.entries(sizes).forEach(([z, v]) => { if (v > mid * BC_SG_OUTLIER || v < mid / BC_SG_OUTLIER) { outliers[z] = v; delete sizes[z]; } });
+  return Object.keys(sizes).length ? { ...sg, typical: bcMedian(Object.values(sizes)), sizes, outliers } : null;
+}
+const BC_SG_OUTLIER = 1.6;
 function bcCompute(m, st) {
   // per-size medians over every distinct listing in the last 14 days (size_asks);
   // older data files only had the cheapest listing per size (size_sources)
@@ -515,20 +527,37 @@ function bcCompute(m, st) {
     : Object.fromEntries(Object.entries(bcAsks(m, st.cond)).map(([k, v]) => [k, { median: bcMedian(v), n: v.length }]));
   const n = Object.values(asks).reduce((a, v) => a + v.n, 0);
   const pooled = bcMedian(Object.values(asks).map((v) => v.median));
-  const shoeAsk = st.cond === "Deadstock" ? (m.resale_last || pooled) : pooled;
+  const ebayShoe = (st.cond === "Deadstock" ? (m.resale_last || pooled) : pooled) || null;
+  const sg = bcMarket(m, st);
+  const src = sg ? st.src : "ebay";
+  // eBay / Stadium Goods / the lower of the two; falls back to whichever exists
+  const pickAsk = (eb, sgv) => {
+    if (eb == null) return sgv;
+    if (sgv == null) return eb;
+    return src === "sg" ? sgv : src === "low" ? Math.min(eb, sgv) : eb;
+  };
+  const shoeAsk = pickAsk(ebayShoe, sg ? sg.typical : null);
   const o = m.price_outlook;
   const trend = st.outlook && o && o.ok && o.change_pct < 0 ? 1 + o.change_pct / 100 : 1;
   const row = (ask) => {
     const sells = ask * st.real * trend;
     return { ask, sells, pay: Math.max(0, Math.floor(sells * (1 - st.fee - st.margin) / 5) * 5) };
   };
-  // a size gets its own price only with >=3 listings; one optimistic ask
+  // An eBay size gets its own price only with >=3 listings; one optimistic ask
   // shouldn't make a shop overpay. Otherwise it uses the typical-pair price.
-  const sizes = Object.keys(asks).sort((a, b) => a - b).map((sz) => {
-    const own = asks[sz].n >= BC_MIN_SIZE_LISTINGS;
-    return { size: sz, n: asks[sz].n, own, ...row(own ? asks[sz].median : shoeAsk) };
+  // A Stadium Goods size price is that store's own lowest ask, so it stands alone.
+  const all = [...new Set([...Object.keys(asks), ...Object.keys(sg ? sg.sizes : {})])].sort((a, b) => a - b);
+  const sizes = all.map((sz) => {
+    const e = asks[sz], own = !!e && e.n >= BC_MIN_SIZE_LISTINGS;
+    const sgv = sg ? (sg.sizes[sz] ?? null) : null;
+    const eb = own ? e.median : ebayShoe;
+    const ask = sgv == null ? (eb ?? shoeAsk) : pickAsk(eb, sgv);
+    // greyed out unless this size's own price (eBay with 3+ listings, or Stadium Goods) set it
+    const priced = (own && ask === eb) || (sgv != null && ask === sgv);
+    return { size: sz, n: e ? e.n : 0, own, ebay: own ? e.median : null, sg: sgv,
+             sgOut: sg ? (sg.outliers[sz] ?? null) : null, priced, ...row(ask) };
   });
-  return { sizes, shoe: shoeAsk ? row(shoeAsk) : null, trend, n };
+  return { sizes, shoe: shoeAsk ? row(shoeAsk) : null, trend, n, sg, src };
 }
 function bcRender() {
   const out = $("#bc-out");
@@ -538,24 +567,36 @@ function bcRender() {
   if (!m) { out.innerHTML = name ? `<p class="bq-fine">Pick a shoe from the list.</p>` : ""; return; }
   const st = bcSettings();
   const r = bcCompute(m, st);
-  if (!r.shoe) { out.innerHTML = `<p class="bq-empty">No ${st.cond === "Used" ? "used" : "new"} eBay asks for this shoe right now.</p>`; return; }
-  const $$$ = (v) => "$" + Math.round(v);
+  const used = st.cond === "Used";
+  if (!r.shoe) { out.innerHTML = `<p class="bq-empty">No ${used ? "used" : "new"} asks for this shoe right now.</p>`; return; }
+  const money = (v) => "$" + Math.round(v);
+  const srcName = { ebay: "eBay", sg: "Stadium Goods", low: "the lower of eBay and Stadium Goods" }[r.src];
+  const sgNote = used ? "Stadium Goods sells new pairs only, so used prices come from eBay."
+    : !r.sg && DATA.models.some((x) => x.marketplaces && x.marketplaces.stadiumgoods)
+      ? "Stadium Goods doesn't list this shoe right now, so prices come from eBay." : "";
   out.innerHTML = `
     <div class="bc-head"><div class="tile" data-slug="${m.slug}">${img(m, "")}</div>
       <div><b>${esc(m.name)}</b>
-        <span>Typical ${st.cond === "Used" ? "used" : "new"} pair: pay at most <em>${$$$(r.shoe.pay)}</em>
-          · sells for about ${$$$(r.shoe.sells)}${m.retail ? ` · retail $${m.retail}` : ""}</span>
-        ${r.trend < 1 ? `<span class="bc-note">Prices lowered ${Math.round((1 - r.trend) * 100)}% — the 30-day forecast expects them to fall.</span>` : ""}</div></div>
-    ${r.sizes.some((z) => z.own) ? `<table class="bq-table bc-table"><thead><tr><th>Size</th><th class="num">eBay ask</th>
-      <th class="num">Listings</th><th class="num">Sells for</th><th class="num">Pay at most</th></tr></thead><tbody>
-      ${r.sizes.map((z) => `<tr${z.own ? "" : ' class="thin"'}><td>${z.size}</td><td class="num">${z.own ? $$$(z.ask) : "typical"}</td>
-        <td class="num">${z.n}</td><td class="num">${$$$(z.sells)}</td>
-        <td class="num"><b>${$$$(z.pay)}</b></td></tr>`).join("")}</tbody></table>`
+        <span>Typical ${used ? "used" : "new"} pair: pay at most <em>${money(r.shoe.pay)}</em>
+          · sells for about ${money(r.shoe.sells)}${m.retail ? ` · retail $${m.retail}` : ""}</span>
+        ${r.sg ? `<span class="bc-src">Priced off ${srcName}. New pair, typical ask:
+          eBay ${m.resale_last ? money(m.resale_last) : "—"} ·
+          <a href="${r.sg.url}" target="_blank" rel="noopener">Stadium Goods</a> ${money(r.sg.typical)}</span>` : ""}
+        ${r.trend < 1 ? `<span class="bc-note">Prices lowered ${Math.round((1 - r.trend) * 100)}% — the 30-day forecast expects them to fall.</span>` : ""}
+        ${sgNote ? `<span class="bc-note">${sgNote}</span>` : ""}</div></div>
+    ${r.sizes.some((z) => z.priced) ? `<table class="bq-table bc-table"><thead><tr><th>Size</th><th class="num">eBay ask</th>
+      <th class="num">eBay listings</th>${r.sg ? `<th class="num">Stadium Goods</th>` : ""}<th class="num">Sells for</th><th class="num">Pay at most</th></tr></thead><tbody>
+      ${r.sizes.map((z) => `<tr${z.priced ? "" : ' class="thin"'}><td>${z.size}</td>
+        <td class="num">${z.ebay != null ? money(z.ebay) : z.n ? "typical" : "—"}</td>
+        <td class="num">${z.n || "—"}</td>${r.sg ? `<td class="num">${z.sg != null ? money(z.sg) : z.sgOut != null
+          ? `<s title="Far from Stadium Goods' other sizes, so it isn't used">${money(z.sgOut)}</s>` : "—"}</td>` : ""}
+        <td class="num">${money(z.sells)}</td><td class="num"><b>${money(z.pay)}</b></td></tr>`).join("")}</tbody></table>`
       : `<p class="bq-fine">Not enough listings per size yet to price sizes separately — the typical-pair
         price above applies to every size.</p>`}
-    <p class="bq-fine">From ${r.n} current eBay ${st.cond === "Used" ? "used" : "new"} listings (asking prices, not completed sales).
-      A size gets its own price only with ${BC_MIN_SIZE_LISTINGS}+ listings; otherwise it uses the typical-pair price
-      (greyed out). Always check the pair is authentic.</p>`;
+    <p class="bq-fine">From ${r.n} current eBay ${used ? "used" : "new"} listings${r.sg ? ` and Stadium Goods' lowest new-pair ask in ${Object.keys(r.sg.sizes).length} sizes (checked ${r.sg.date})` : ""}
+      — asking prices, not completed sales. An eBay size gets its own price only with ${BC_MIN_SIZE_LISTINGS}+ listings; otherwise it
+      uses the typical-pair price (greyed out). A Stadium Goods size priced far from its other sizes is crossed out and not used. StockX and GOAT don't share their prices openly, so they aren't included.
+      Always check the pair is authentic.</p>`;
   $$("#bc-out [data-slug]").forEach((x) => (x.onclick = () => openSheet(x.dataset.slug)));
 }
 function bcOpen(slug) {
@@ -570,11 +611,13 @@ function initBuyCalc() {
   $("#bc-shoes").innerHTML = DATA.models.map((m) => `<option value="${esc(m.name)}"></option>`).join("");
   try {
     const saved = JSON.parse(localStorage.getItem("bc-settings") || "{}");
-    BC_KEYS.forEach((k) => { if (saved[k] != null) $("#bc-" + k).value = saved[k]; });
+    BC_KEYS.forEach((k) => { if (saved[k] != null && $("#bc-" + k)) $("#bc-" + k).value = saved[k]; });
   } catch (_) {}
-  ["bc-shoe", "bc-cond", "bc-fee", "bc-margin", "bc-real", "bc-outlook"].forEach((id) => {
-    $("#" + id).addEventListener("input", bcRender);
-    $("#" + id).addEventListener("change", bcRender);
+  ["bc-shoe", "bc-cond", "bc-src", "bc-fee", "bc-margin", "bc-real", "bc-outlook"].forEach((id) => {
+    const el = $("#" + id);                 // a cached older page may lack a control
+    if (!el) return;
+    el.addEventListener("input", bcRender);
+    el.addEventListener("change", bcRender);
   });
 }
 

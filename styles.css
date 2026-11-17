@@ -1597,7 +1597,12 @@ html, body { overflow-x: hidden; }
   .bc-form { grid-template-columns: 1fr 1fr; }
   .bc-shoe, .bc-check { grid-column: 1 / -1; }
   .bc-head { grid-template-columns: 90px 1fr; }
+  .bc-table { font-size: .8rem; }
+  .bc-table td, .bc-table th { padding: 7px 4px; }
+  .bc-table th, .bc-table th.num { letter-spacing: .02em; white-space: normal; line-height: 1.25; vertical-align: bottom; }
 }
+.bc-head .bc-src { color: var(--ink-3); font-size: .82rem; }
+.bc-head .bc-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 @media print { body.printing-bq .bc, body.printing-bq .bq-buybtn { display: none !important; } }
 
 /* store accounts */

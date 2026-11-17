@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=55" />
+  <link rel="stylesheet" href="styles.css?v=57" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -222,7 +222,7 @@
 
       <div class="bc" id="bc">
         <h3 class="bq-h">Buy-price calculator</h3>
-        <p class="bq-fine">What to pay a seller for a pair, by size: what that size sells for on eBay,
+        <p class="bq-fine">What to pay a seller for a pair, by size: what that size sells for on eBay and Stadium Goods,
           minus your fees and the margin you want. Built for consignment and resale shops.</p>
         <div class="bc-form">
           <label class="bc-shoe">Shoe
@@ -230,12 +230,16 @@
             <datalist id="bc-shoes"></datalist></label>
           <label>Condition
             <select id="bc-cond"><option value="Deadstock">New (deadstock)</option><option value="Used">Used</option></select></label>
+          <label>Price off
+            <select id="bc-src"><option value="ebay">eBay</option><option value="sg">Stadium Goods</option>
+              <option value="low">Lower of the two</option></select>
+            <small>Stadium Goods prices new pairs only</small></label>
           <label>Your selling fees <span><input id="bc-fee" type="number" min="0" max="40" step="0.5" value="3" />%</span>
             <small>~3% in store (card fees); online marketplaces often 10–15% — check yours</small></label>
           <label>Margin you want <span><input id="bc-margin" type="number" min="0" max="80" step="1" value="25" />%</span>
             <small>of the sale price</small></label>
           <label>You expect to sell at <span><input id="bc-real" type="number" min="50" max="110" step="1" value="90" />%</span>
-            <small>of the eBay ask — asks run above what pairs actually sell for</small></label>
+            <small>of the ask — asks run above what pairs actually sell for</small></label>
           <label class="bc-check"><input id="bc-outlook" type="checkbox" checked />
             Use the 30-day forecast when prices are expected to fall</label>
         </div>
@@ -472,7 +476,7 @@ score = % of all recorded daily raw scores below it</pre>
 
   <script src="app.js?v=55"></script>
   <script src="config.js?v=1"></script>
-  <script src="boutique.js?v=13"></script>
+  <script src="boutique.js?v=18"></script>
   <script src="account.js?v=1"></script>
   <script src="ask.js?v=2"></script>
 </body>
