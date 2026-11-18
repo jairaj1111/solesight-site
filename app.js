@@ -102,6 +102,9 @@ init();
 
 async function init() {
   DATA = await fetch("data.json?v=8").then((r) => r.json());
+  Object.entries(DATA.stores || {}).forEach(([d, st]) => { if (st && st.name) STORE_NAMES[d] = STORE_NAMES[d] || st.name; });
+  const nStores = Object.keys(DATA.stores || {}).length;
+  if (nStores) document.querySelectorAll(".n-stores").forEach((el) => (el.textContent = nStores));
   document.documentElement.style.setProperty("--n", DATA.models.length);
   buildEyebrow();
   buildChips();

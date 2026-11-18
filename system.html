@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=57" />
+  <link rel="stylesheet" href="styles.css?v=60" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -50,7 +50,7 @@
       <h1 class="home-title">The AI sneaker<br />hype index</h1>
       <div class="home-copy">
         <p id="home-sub">113 sneakers ranked every morning on resale prices,
-          search demand, social chatter and what's selling out in 19 boutiques.</p>
+          search demand, social chatter and what's selling out in <span class="n-stores">60</span> boutiques.</p>
         <div class="home-actions">
           <a href="hype-index.html" data-page="hype-index" class="btn btn-solid">Open the index</a>
           <a href="system.html" data-page="system" class="btn btn-ghost">How it works</a>
@@ -202,6 +202,8 @@
       <div class="bq-row">
         <label class="bq-store-pick">Your store
           <select id="bq-store"></select></label>
+        <label class="bq-store-pick">Your state
+          <select id="bq-state"></select></label>
       </div>
       <div class="bq-row">
         <button class="btn btn-solid" id="bq-sample" type="button">Try it with a sample inventory</button>
@@ -215,7 +217,7 @@
           size and quantity in stock. Optional: a style code (e.g. FV5029-100) for exact matching,
           a colorway, your selling price (to compare against competitors), and units sold in the
           last 30 days for advice specific to your store.</p>
-        <p><b>Competitor data</b> comes from the public product listings of the 19 boutiques
+        <p><b>Competitor data</b> comes from the public product listings of the <span class="n-stores">60</span> boutiques
           SoleSight tracks, refreshed nightly.</p>
       </details>
       <div id="bq-out"></div>
@@ -245,6 +247,18 @@
         </div>
         <div id="bc-out"></div>
       </div>
+
+      <div class="bc dp" id="dp">
+        <h3 class="bq-h">Plan a drop</h3>
+        <p class="bq-fine">How many pairs to order in each size for an upcoming release. Pick the drop and your total pairs.</p>
+        <div class="bc-form">
+          <label class="bc-shoe">Upcoming drop
+            <select id="dp-drop"></select></label>
+          <label>Total pairs <span><input id="dp-pairs" type="number" min="1" max="2000" step="1" value="24" /></span>
+            <small>across all sizes</small></label>
+        </div>
+        <div id="dp-out"></div>
+      </div>
     </section>
 
     <!-- ───────────── does it predict? (backtest) ───────────── -->
@@ -268,7 +282,7 @@
       <div class="sys-flow">
         <div class="sys-step reveal"><span class="sys-n">01</span><h3>Collect</h3>
           <p>Google Trends, eBay (US · UK · DE), Bluesky, Mastodon, YouTube,
-            Google News + sneaker press, Wikipedia and 19 boutique feeds —
+            Google News + sneaker press, Wikipedia and <span class="n-stores">60</span> boutique feeds —
             every adapter degrades gracefully if a source refuses.</p></div>
         <div class="sys-step reveal"><span class="sys-n">02</span><h3>Store</h3>
           <p>One SQLite database, saved after every nightly run — with the
@@ -474,9 +488,9 @@ score = % of all recorded daily raw scores below it</pre>
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=55"></script>
+  <script src="app.js?v=56"></script>
   <script src="config.js?v=1"></script>
-  <script src="boutique.js?v=18"></script>
+  <script src="boutique.js?v=22"></script>
   <script src="account.js?v=1"></script>
   <script src="ask.js?v=2"></script>
 </body>

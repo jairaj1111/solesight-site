@@ -168,7 +168,10 @@ function bqSizeVerdict(shoeKey, qty, sc) {
 /* ---------- competitors (public Shopify data from tracked boutiques) ---------- */
 const bqMedian = (xs) => { const v = xs.filter((x) => x != null).sort((a, b) => a - b);
   return v.length ? v[Math.floor(v.length / 2)] : null; };
-const bqStoreName = (d) => (typeof STORE_NAMES !== "undefined" && STORE_NAMES[d]) || d;
+const bqStoreName = (d) => (DATA.stores && DATA.stores[d] && DATA.stores[d].name)
+  || (typeof STORE_NAMES !== "undefined" && STORE_NAMES[d]) || d;
+const bqStoreCount = () => Object.keys(DATA.stores || {}).length
+  || (typeof STORE_NAMES !== "undefined" ? Object.keys(STORE_NAMES).length : 19);
 function bqCompetitors(m, myStore) {
   const sizesBy = {};
   (m.size_sources || []).filter((x) => x.kind === "boutique").forEach((x) => {
@@ -187,6 +190,138 @@ function bqCompetitors(m, myStore) {
       title: c.title, left: c.avail, total: c.total, sizes: [...new Set(sizesBy[c.store] || [])],
       comparable: !!c.price && inBand && !used, used };
   }).sort((a, b) => (b.left > 0) - (a.left > 0) || (a.price ?? 1e9) - (b.price ?? 1e9));
+}
+
+/* ---------- local demand ----------
+   state_index (data.json, per shoe) = that state's Google search interest
+   over the last 30 days ÷ the median across states with enough searches.
+   1.8 reads "searched 1.8× the typical state". */
+const BQ_STATES = ["Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
+  "District of Columbia", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
+  "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana",
+  "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota",
+  "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas",
+  "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"];
+const BQ_LOCAL_HI = 1.3, BQ_LOCAL_LO = 0.7;
+function bqMyState(myStore) {
+  const pick = $("#bq-state");
+  if (pick && pick.value) return pick.value;
+  return (myStore && DATA.stores && DATA.stores[myStore] && DATA.stores[myStore].state) || "";
+}
+const bqLocal = (m, state) => (state && m.state_index ? m.state_index[state] ?? null : null);
+function bqLocalText(m, state) {
+  const r = bqLocal(m, state);
+  if (r == null) return "";
+  if (r >= BQ_LOCAL_HI) return `Searched ${r.toFixed(1)}× the typical state in ${state}`;
+  if (r <= BQ_LOCAL_LO) return `Searched less in ${state} (${r.toFixed(1)}× the typical state)`;
+  return "";
+}
+function bqLocalBlock(rep) {
+  if (!rep.state) return "";
+  const rows = DATA.models.map((m) => ({ m, r: bqLocal(m, rep.state) })).filter((x) => x.r != null && x.r >= BQ_LOCAL_HI)
+    .sort((a, b) => b.r - a.r).slice(0, 8);
+  if (!rows.length) return "";
+  const carried = new Set(rep.out.map((e) => e.m.slug));
+  return `<h3 class="bq-h">Local demand · ${esc(rep.state)}</h3>
+    <p class="bq-fine">Shoes searched most in ${esc(rep.state)} compared with the typical state, from Google search interest over
+      the last 30 days (only states with enough searches count).</p>
+    <table class="bq-table"><thead><tr><th>Shoe</th><th class="num">vs. typical state</th><th class="num">Hype</th><th>You carry</th></tr></thead>
+      <tbody>${rows.map((x) => `<tr><td><a role="button" tabindex="0" class="bq-link" data-slug="${x.m.slug}">${esc(x.m.name)}</a></td>
+        <td class="num"><b>${x.r.toFixed(1)}×</b></td><td class="num">${x.m.hype ?? "—"}</td>
+        <td>${carried.has(x.m.slug) ? "✓" : "—"}</td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ---------- selling fastest ----------
+   sold_7d (data.json, per shoe) = sizes that went from in stock to sold out at
+   each tracked store over the last 7 days (both readings listed, ≤3 days apart).
+   Ranked by shops like yours when that signal is live, else every tracked shop. */
+const BQ_SOLD_MIN_NEAR = 10;
+function bqSoldFast(rep, n = 8) {
+  const near = rep.shelf && rep.shelf.similar ? rep.shelf.nearStores : [];
+  const carried = new Set(rep.out.map((e) => e.m.slug));
+  const rows = DATA.models.map((m) => {
+    const by = m.sold_7d || {};
+    const all = Object.entries(by).filter(([d]) => d !== rep.myStore).reduce((a, [, v]) => a + v, 0);
+    const nearN = near.reduce((a, d) => a + (by[d] || 0), 0);
+    const shops = Object.keys(by).filter((d) => d !== rep.myStore && by[d] > 0).length;
+    return { m, all, near: nearN, shops, carried: carried.has(m.slug) };
+  }).filter((x) => x.all > 0);
+  // shops like yours only when they sold enough this week to rank on; else every tracked shop
+  const nearTotal = rows.reduce((a, x) => a + x.near, 0);
+  const key = near.length && nearTotal >= BQ_SOLD_MIN_NEAR ? "near" : "all";
+  const pool = key === "near" ? rows.filter((x) => x.near > 0) : rows;
+  return { key, rows: pool.sort((a, b) => b[key] - a[key] || b.all - a.all).slice(0, n) };
+}
+function bqSoldBlock(rep) {
+  const sf = rep.sold;
+  if (!sf || !sf.rows.length) return "";
+  const nearHead = sf.key === "near";
+  return `<h3 class="bq-h">Selling fastest this week</h3>
+    <p class="bq-fine">Sizes that sold out at ${nearHead ? "the shops most like yours" : "tracked boutiques"} in the last 7 days.
+      A size counts when a shop listed it in stock and then as sold out on the next reading. That's a strong sign
+      of a sale, not proof of one.</p>
+    <table class="bq-table"><thead><tr><th>Shoe</th>${nearHead ? `<th class="num">Shops like yours</th>` : ""}
+      <th class="num">All tracked shops</th><th>You carry</th></tr></thead>
+      <tbody>${sf.rows.map((x) => `<tr><td><a role="button" tabindex="0" class="bq-link" data-slug="${x.m.slug}">${esc(x.m.name)}</a></td>
+        ${nearHead ? `<td class="num"><b>${x.near}</b> size${x.near === 1 ? "" : "s"}</td>` : ""}
+        <td class="num">${x.all} size${x.all === 1 ? "" : "s"} · ${x.shops} shop${x.shops === 1 ? "" : "s"}</td>
+        <td>${x.carried ? "✓" : "—"}</td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ---------- "Add to your shelf" ----------
+   Index shoes the shop doesn't carry, ranked by four things it can check:
+   shops with shelves like yours carry it, Hype level and this week's rise,
+   resale margin over retail, and fit with the shop's usual price range.
+   "Shops like yours" = the BQ_SHELF_K tracked boutiques whose shelves overlap
+   most with this shop's (Jaccard, weighted). It's used only while the nightly
+   hide-a-shoe test (solesight/insights/shelf_recs.py, same K) shows it beats
+   "what most shops carry"; otherwise the peer part is plain popularity. */
+const BQ_SHELF_K = 5;
+const BQ_REC_W = { peer: 0.35, level: 0.2, rise: 0.15, margin: 0.2, fit: 0.1 };
+function bqShelfRecs(carried, myStore, n = 8, state = "") {
+  const shelves = {};
+  DATA.models.forEach((m) => (m.stockists || []).forEach((s) => {
+    if (s.store !== myStore) (shelves[s.store] = shelves[s.store] || new Set()).add(m.slug);
+  }));
+  const stores = Object.keys(shelves);
+  const sm = DATA.shelf_model || {};
+  const jac = (a, b) => { let i = 0; a.forEach((x) => { if (b.has(x)) i++; }); const u = a.size + b.size - i; return u ? i / u : 0; };
+  const near = stores.map((d) => ({ d, w: jac(carried, shelves[d]) })).filter((x) => x.w > 0)
+    .sort((a, b) => b.w - a.w || (a.d < b.d ? -1 : 1)).slice(0, BQ_SHELF_K);
+  const similar = !!sm.similar_live && near.length > 0;
+  const wsum = near.reduce((a, x) => a + x.w, 0);
+  const priceOf = (m) => m.boutique_price || m.resale_last || m.retail || null;
+  const mine = DATA.models.filter((m) => carried.has(m.slug)).map(priceOf).filter(Boolean).sort((a, b) => a - b);
+  const q = (f) => mine[Math.round(f * (mine.length - 1))];
+  const range = mine.length >= 3 ? [q(0.25), q(0.75)] : null;
+  const recs = DATA.models
+    .filter((m) => !carried.has(m.slug) && (m.hype ?? 0) >= 40 && m.stage !== "cooling")
+    .map((m) => {
+      const carriers = stores.filter((d) => shelves[d].has(m.slug)).length;
+      const nearHave = near.filter((x) => shelves[x.d].has(m.slug));
+      const peer = similar ? nearHave.reduce((a, x) => a + x.w, 0) / wsum : stores.length ? carriers / stores.length : 0;
+      const rise = Math.max(0, Math.min(1, (m.hype_delta_7d || 0) / 15));
+      const prem = m.resale_premium;
+      const margin = prem ? Math.max(0, Math.min(1, prem - 1)) : 0;
+      const p = priceOf(m);
+      const inRange = !!(range && p && p >= range[0] / 1.2 && p <= range[1] * 1.2);
+      const fit = !range || !p ? 0.5 : inRange ? 1
+        : Math.max(0, 1 - Math.abs(Math.log(p / (p < range[0] ? range[0] / 1.2 : range[1] * 1.2))));
+      const score = BQ_REC_W.peer * peer + BQ_REC_W.level * (m.hype ?? 0) / 100 + BQ_REC_W.rise * rise
+        + BQ_REC_W.margin * margin + BQ_REC_W.fit * fit;
+      const why = [];
+      if (similar && nearHave.length) why.push(`${nearHave.length} of the ${near.length} shops most like yours carry it`);
+      else if (carriers) why.push(`Carried by ${carriers} of ${stores.length} tracked shops`);
+      why.push(`Hype ${m.hype ?? "—"}${(m.hype_delta_7d || 0) >= 1 ? `, up ${Math.round(m.hype_delta_7d)} this week` : ""}`);
+      if (prem && prem >= 1.1) why.push(`Resells at ${prem.toFixed(1)}× retail`);
+      if (inRange) why.push("In your usual price range");
+      const loc = bqLocal(m, state);
+      if (loc != null && loc >= BQ_LOCAL_HI) why.push(`Searched ${loc.toFixed(1)}× the typical state in ${state}`);
+      return { m, score, why };
+    })
+    .sort((a, b) => b.score - a.score || (b.m.hype ?? 0) - (a.m.hype ?? 0))
+    .slice(0, n);
+  return { recs, similar, near: near.length, nearStores: near.map((x) => x.d), range, test: sm };
 }
 
 /* ---------- report ---------- */
@@ -232,7 +367,9 @@ function bqAnalyze(rows, myStore) {
   const order = { reorder: 0, hold: 1, "hold-off": 2, markdown: 3 };
   out.sort((a, b) => order[a.verdict.key] - order[b.verdict.key] || (b.m.hype ?? 0) - (a.m.hype ?? 0));
   const carried = new Set(out.map((e) => e.m.slug));
-  const missing = DATA.models.filter((m) => !carried.has(m.slug)).slice(0, 8);
+  const state = bqMyState(myStore);
+  const shelf = bqShelfRecs(carried, myStore, 8, state);
+  const missing = shelf.recs.map((r) => r.m);
   // which competitors overlap most with this store's shelves
   const byStore = {};
   out.forEach((e) => e.comps.forEach((c) => {
@@ -242,7 +379,8 @@ function bqAnalyze(rows, myStore) {
   }));
   const overview = Object.values(byStore).sort((a, b) => b.shoes - a.shoes || b.inStock - a.inStock)
     .map((b) => ({ ...b, gap: bqMedian(b.gaps) }));
-  BQ_LAST = { out, untracked: [...untracked.entries()], missing, rows: rows.length, overview, myStore };
+  BQ_LAST = { out, untracked: [...untracked.entries()], missing, shelf, rows: rows.length, overview, myStore, state };
+  BQ_LAST.sold = bqSoldFast(BQ_LAST);
   return BQ_LAST;
 }
 
@@ -269,6 +407,7 @@ function bqRender(rep) {
         ${e.sizes.length ? `<div class="bq-sizes">${e.sizes.map((s) => `
           <span class="bq-size ${s.verdict}" title="Demand ${Math.round(s.score * 100)}/100 · ${s.seen ? `${s.seen} tracked store listing${s.seen === 1 ? "" : "s"}` : "market-wide size curve"}${s.ask ? ` · eBay ask $${Math.round(s.ask)}` : ""}">
             <b>${s.size}</b><small>${window.BQ_PUBLIC ? (s.qty ? "in stock" : "sold out") : s.qty} · ${lbl[s.verdict]}</small></span>`).join("")}</div>` : ""}
+        ${bqLocalText(e.m, rep.state) ? `<p class="bq-note"><b>Near you:</b> ${esc(bqLocalText(e.m, rep.state))}.</p>` : ""}
         ${e.missingSizes.length ? `<p class="bq-note"><b>Not stocked, but in demand:</b> sizes ${e.missingSizes.join(", ")}.</p>` : ""}
         ${bqOutlook(e)}
         ${bqCompBlock(e)}
@@ -289,11 +428,11 @@ function bqRender(rep) {
         Size advice blends the typical sneaker size curve with each shoe's own resale prices and sell-outs at
         tracked stores — guidance, not exact quantities${rep.out.some((e) => e.sold != null) || window.BQ_PUBLIC ? "" : ". Add a units-sold column to make it specific to your store"}.</span></div>
     ${bqOverview(rep)}
+    ${bqSoldBlock(rep)}
+    ${bqLocalBlock(rep)}
     <h3 class="bq-h">Shoe by shoe</h3>
     <div class="bq-list">${cards}</div>
-    ${rep.missing.length ? `<h3 class="bq-h">Hot right now — not in your inventory</h3>
-      <div class="bq-missing">${rep.missing.map((m) => `<div class="bq-miss" data-slug="${m.slug}">
-        <div class="tile">${img(m, "")}</div><span>${esc(m.name)}</span><b>${m.hype ?? "—"}</b></div>`).join("")}</div>` : ""}
+    ${bqShelfBlock(rep)}
     ${rep.untracked.length ? `<h3 class="bq-h">Not tracked yet (${rep.untracked.length})</h3>
       <p class="bq-fine">We don't score these yet — tell us which matter and we'll add them.</p>
       <ul class="bq-untracked">${rep.untracked.slice(0, 40).map(([t, q]) => `<li>${esc(t)}<span>${q} pairs</span></li>`).join("")}</ul>` : ""}`;
@@ -324,7 +463,7 @@ function bqOutlook(e) {
 }
 
 function bqCompBlock(e) {
-  if (!e.comps.length) return `<p class="bq-note"><b>Competitors:</b> none of the ${typeof STORE_NAMES !== "undefined" ? Object.keys(STORE_NAMES).length : 19} tracked boutiques list it right now.</p>`;
+  if (!e.comps.length) return `<p class="bq-note"><b>Competitors:</b> none of the ${bqStoreCount()} tracked boutiques list it right now.</p>`;
   const inStock = e.comps.filter((c) => c.left > 0).length;
   const priced = e.comps.filter((c) => c.comparable).map((c) => c.price);
   const from = priced.length ? `from $${Math.round(Math.min(...priced))}` : "";
@@ -351,6 +490,28 @@ function bqCompBlock(e) {
       ${gap || scarce ? `<p class="bq-note">${[gap, scarce].filter(Boolean).join(" ")}</p>` : ""}
       <table class="bq-table"><thead><tr><th>Store</th><th class="num">Price</th><th>Sizes</th></tr></thead><tbody>${rows}${more > 0 ? `<tr><td colspan="3" class="bq-fine">+ ${more} more store${more === 1 ? "" : "s"} (full list at solesight.xyz/boutiques.html)</td></tr>` : ""}</tbody></table>
     </details>`;
+}
+
+function bqShelfBlock(rep) {
+  const sh = rep.shelf;
+  if (!sh || !sh.recs.length) return "";
+  const t = sh.test || {};
+  const pct = (x) => Math.round((x || 0) * 100) + "%";
+  const how = sh.similar
+    ? `"Shops like yours" means the ${sh.near} tracked boutiques whose shelves overlap most with yours. We test it every night:
+       hide a shoe a shop carries and check it comes back in the top ${t.top_n || 10}. It does ${pct(t.hit_similar)} of the time,
+       vs ${pct(t.hit_popular)} for "what most shops carry" (${t.pairs} tests).`
+    : t.pairs
+      ? `Ranked with how many tracked shops carry each shoe. "Shops like yours" isn't beating that in our nightly test right now
+         (${pct(t.hit_similar)} vs ${pct(t.hit_popular)}), so it isn't used.`
+      : `Ranked with how many tracked shops carry each shoe.`;
+  const range = sh.range ? ` Your usual price range: $${Math.round(sh.range[0])}–$${Math.round(sh.range[1])}.` : "";
+  return `<h3 class="bq-h">Add to your shelf</h3>
+    <p class="bq-fine">Shoes on the index you don't carry, ranked by shops like yours, Hype, resale margin and price fit.
+      ${how}${range}</p>
+    <div class="bq-recs">${sh.recs.map((r) => `<div class="bq-rec" data-slug="${r.m.slug}">
+      <div class="tile">${img(r.m, "")}</div>
+      <div><b>${esc(r.m.name)}</b><ul>${r.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></div></div>`).join("")}</div>`;
 }
 
 function bqOverview(rep) {
@@ -464,6 +625,8 @@ function bqSummary() {
     dont_reorder: r.out.filter((e) => e.verdict.key === "hold-off" || e.verdict.key === "markdown").length,
     top_reorder: reorder.slice(0, 3).map((e) => e.m.name),
     hot_missing: r.missing.slice(0, 3).map((m) => m.name),
+    sold_fast: (r.sold ? r.sold.rows : []).slice(0, 3).map((x) => x.m.name),
+    sold_fast_near: !!(r.sold && r.sold.key === "near"),
   };
 }
 async function bqWeeklyMode() {
@@ -472,6 +635,8 @@ async function bqWeeklyMode() {
   if (!path) return;
   const pick = $("#bq-store");
   if (pick && q.get("store")) pick.value = q.get("store");
+  const stq = q.get("state") || (DATA.stores && DATA.stores[q.get("store")] && DATA.stores[q.get("store")].state);
+  if (stq && $("#bq-state")) $("#bq-state").value = stq;
   if (q.get("name")) window.BQ_STORE_NAME = q.get("name");
   if (q.get("public")) window.BQ_PUBLIC = true;
   const text = await fetch(path).then((r) => r.text());
@@ -623,6 +788,7 @@ function initBuyCalc() {
 
 function initBoutique() {
   initBuyCalc();
+  initDropPlan();
   const drop = $("#bq-drop"), file = $("#bq-file");
   if (!drop || !file) return;
   const read = (f) => { if (f) { BQ_FILENAME = f.name; f.text().then(bqLoadText); } };
@@ -633,7 +799,16 @@ function initBoutique() {
     pick.innerHTML = `<option value="">My store isn't one of the tracked boutiques</option>` +
       [...stores].map((d) => [d, bqStoreName(d)]).sort((a, b) => a[1].localeCompare(b[1]))
         .map(([d, n]) => `<option value="${d}">${esc(n)}</option>`).join("");
-    pick.onchange = bqRerender;
+    pick.onchange = () => {
+      const st = DATA.stores && DATA.stores[pick.value] && DATA.stores[pick.value].state;
+      if (st && $("#bq-state")) $("#bq-state").value = st;
+      bqRerender();
+    };
+  }
+  const stPick = $("#bq-state");
+  if (stPick) {
+    stPick.innerHTML = `<option value="">Pick your state</option>` + BQ_STATES.map((x) => `<option>${x}</option>`).join("");
+    stPick.onchange = bqRerender;
   }
   file.onchange = () => read(file.files[0]);
   ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
@@ -641,4 +816,68 @@ function initBoutique() {
   drop.addEventListener("drop", (e) => read(e.dataTransfer.files[0]));
   $("#bq-sample").onclick = () => fetch("sample-inventory.csv").then((r) => r.text()).then((t) => { BQ_FILENAME = "sample-inventory.csv"; bqLoadText(t); });
   bqWeeklyMode();
+}
+
+
+/* ---------- plan a drop ----------
+   How many pairs per size for an upcoming release. Weights per size start from
+   the typical sneaker size curve (BQ_PRIOR) and are adjusted like the report's
+   size advice: by how often each size sells out at tracked shops, for this shoe
+   if it's already on the index, otherwise for the brand's shoes on the index.
+   Squared, so the middle of the run gets more than the tails; then the order is
+   split with largest-remainder rounding. A starting point, not a guarantee. */
+const DP_SIZES = Object.keys(BQ_PRIOR).sort((a, b) => a - b);
+const DP_NOT_MENS = /\b(wmns|women'?s|womens|\(w\)|gs|grade school|kids|toddler|td|ps|preschool)\b/i;
+function dpDrops() {
+  const today = new Date().toISOString().slice(0, 10);
+  return (DATA.releases || []).filter((r) => r.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+function dpPlan(drop, total) {
+  const global = bqGlobalCurve();
+  const m = drop.slug && DATA.models.find((x) => x.slug === drop.slug);
+  let basis, model;
+  if (m) { model = m; basis = `${m.name}'s own sell-outs at tracked shops`; }
+  else {
+    const same = DATA.models.filter((x) => (x.brand || "").toLowerCase() === (drop.brand || "").toLowerCase());
+    model = { size_sources: same.flatMap((x) => (x.size_sources || []).filter((src) => src.kind === "boutique")) };
+    basis = same.length ? `sell-outs of ${same.length} ${drop.brand} shoe${same.length === 1 ? "" : "s"} on the index`
+      : "the typical sneaker size curve only (no shoes from this brand on the index yet)";
+  }
+  const scoreOf = bqSizeScores(model, global);
+  const w = DP_SIZES.map((sz) => ({ size: sz, score: scoreOf(sz).score, seen: scoreOf(sz).seen }));
+  const sum = w.reduce((a, x) => a + x.score ** 2, 0) || 1;
+  w.forEach((x) => { x.share = x.score ** 2 / sum; x.exact = x.share * total; x.pairs = Math.floor(x.exact); });
+  let left = total - w.reduce((a, x) => a + x.pairs, 0);
+  [...w].sort((a, b) => (b.exact - b.pairs) - (a.exact - a.pairs)).forEach((x) => { if (left > 0) { x.pairs++; left--; } });
+  return { rows: w, basis, seen: w.reduce((a, x) => a + x.seen, 0) };
+}
+function dpRender() {
+  const out = $("#dp-out");
+  if (!out) return;
+  const drops = dpDrops();
+  const drop = drops[+$("#dp-drop").value];
+  const total = Math.max(1, Math.min(2000, parseInt($("#dp-pairs").value, 10) || 24));
+  if (!drop) { out.innerHTML = `<p class="bq-empty">No upcoming drops on the calendar right now.</p>`; return; }
+  const plan = dpPlan(drop, total);
+  const peak = Math.max(...plan.rows.map((x) => x.pairs), 1);
+  out.innerHTML = `
+    ${DP_NOT_MENS.test(drop.name) ? `<p class="bc-note">This looks like a women's or kids' release. The run below uses men's sizes, so adjust it.</p>` : ""}
+    <table class="bq-table dp-table"><thead><tr><th>Size</th><th class="num">Share</th><th class="num">Pairs</th><th></th></tr></thead>
+      <tbody>${plan.rows.map((x) => `<tr${x.pairs ? "" : ' class="thin"'}><td>${x.size}</td>
+        <td class="num">${Math.round(x.share * 100)}%</td><td class="num"><b>${x.pairs}</b></td>
+        <td><span class="dp-bar" style="width:${Math.round(x.pairs / peak * 100)}%"></span></td></tr>`).join("")}</tbody></table>
+    <p class="bq-fine">${total} pairs of ${esc(drop.name)} (${dropWhen ? dropWhen(drop) : drop.date}${drop.price ? `, $${drop.price} retail` : ""}).
+      Based on the typical sneaker size curve, adjusted by ${plan.basis}${plan.seen ? ` (${plan.seen} size listings)` : ""}.
+      A starting point: your own past sales by size beat any curve.</p>`;
+}
+function initDropPlan() {
+  const sel = $("#dp-drop");
+  if (!sel) return;
+  const drops = dpDrops();
+  sel.innerHTML = drops.length ? drops.map((r, i) => `<option value="${i}">${esc(r.date.slice(5).replace("-", "/"))} · ${esc(r.name)}</option>`).join("")
+    : `<option value="">No upcoming drops</option>`;
+  const want = new URLSearchParams(location.search).get("drop");
+  if (want) { const i = drops.findIndex((r) => r.name === want); if (i >= 0) sel.value = String(i); }
+  ["dp-drop", "dp-pairs"].forEach((id) => { const el = $("#" + id); el.addEventListener("input", dpRender); el.addEventListener("change", dpRender); });
+  dpRender();
 }
