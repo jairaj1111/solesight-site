@@ -1103,7 +1103,7 @@ function openSheet(slug, opts) {
           </summary>
           <div class="size-source-sizes">
             ${src.sizes.map((z) => `
-              <a class="size-source-row ${z.available ? "in" : "out"}" href="${z.url || `https://${src.source}`}" target="_blank" rel="noopener">
+              <a class="size-source-row ${z.available ? "in" : "out"}" href="${z.url || src.url || `https://${src.source}`}" target="_blank" rel="noopener">
                 <span class="size-source-val">${esc(z.size)}</span>
                 ${z.price ? `<span class="size-source-price">$${Math.round(z.price)}</span>` : ""}
                 ${z.condition ? `<span class="size-source-cond">${esc(z.condition)}</span>` : ""}

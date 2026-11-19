@@ -165,14 +165,60 @@ function bqSizeVerdict(shoeKey, qty, sc) {
   return "ok";
 }
 
+/* ---------- colorways ----------
+   Same rules as solesight/ingest/colorways.py: a style code (from the shop's
+   SKU column, e.g. CD4487-100-8 -> CD4487-100) identifies a colorway exactly;
+   without one, colorway names match when they share most words. No regex
+   lookbehind, so older iPhones (Safari < 16.4) can still run this file. */
+const BQ_CODE_RX = [
+  [null, /(?:^|[^A-Z0-9])(\d{4}[A-Z]\d{3})[-. ]?(\d{3})(?![0-9])/],
+  [null, /(?:^|[^A-Z0-9])([A-Z]{2}\d{4})[-. ]?(\d{3})(?![0-9])/],
+  [null, /(?:^|[^A-Z0-9])(\d{6})[-. ](\d{3})(?![0-9])/],
+  [null, /(?:^|[^A-Z0-9])(VN0[A-Z0-9]{6,8})(?![A-Z0-9])/],
+  [null, /(?:^|[^A-Z0-9])(L\d{8})(?![0-9])/],
+  [null, /(?:^|[^A-Z0-9])(\d[A-Z]{2}\d{8})(?![0-9])/],
+  ["puma", /(?:^|[^A-Z0-9])(\d{6})[-. ](\d{2})(?![0-9])/],
+  ["on", /(?:^|[^A-Z0-9.])(\d{2}\.\d{5})(?![0-9])/],
+  ["adidas", /(?:^|[^A-Z0-9])([A-Z]{1,2}\d{4,5})(?![A-Z0-9])(?!-\d{3})/],
+  ["new balance", /(?:^|[^A-Z0-9])((?:BB|CM|GC|ML|MR|MS|MT|PC|U|M|W)\d{3,4}[A-Z][A-Z0-9]{1,3})(?![A-Z0-9])/],
+];
+function bqStyleCode(text, brand) {
+  if (!text) return null;
+  const t = String(text).toUpperCase().replace(/\|/g, "-"), b = (brand || "").toLowerCase();
+  for (const [only, rx] of BQ_CODE_RX) {
+    if (only && b !== only) continue;
+    const m = t.match(rx);
+    if (m) return m.slice(1).filter(Boolean).join("-");
+  }
+  return null;
+}
+const BQ_CW_STOP = new Set(["and", "the", "x", "with", "of"]);
+const bqNameKey = (n) => new Set(((n || "").toLowerCase().replace(/grey/g, "gray").match(/[a-z0-9]+/g) || [])
+  .filter((w) => w.length > 1 && !BQ_CW_STOP.has(w)));
+function bqSameCw(codeA, nameA, codeB, nameB) {
+  if (codeA && codeB) return codeA === codeB;
+  const a = bqNameKey(nameA), b = bqNameKey(nameB);
+  if (!a.size || !b.size) return false;
+  let i = 0; a.forEach((w) => { if (b.has(w)) i++; });
+  return i / Math.min(a.size, b.size) >= 0.75;
+}
+// colorways in the market (new data files group every store listing by colorway)
+const bqMarketCws = (m) => (m.colorways || []).filter((c) => Array.isArray(c.listings));
+function bqCwDemand(c) {   // for sorting: this week's sell-outs, then share sold out
+  return (c.sold_7d || 0) * 10 + (c.sizes_total >= 4 ? (c.sold_out_share || 0) * 5 : 0) + c.stores * 0.1;
+}
+const bqSellingOut = (c) => !c.womens && !c.kids && ((c.sold_7d || 0) >= 3 || (c.sizes_total >= 6 && (c.sold_out_share || 0) >= 0.6));
+
 /* ---------- competitors (public Shopify data from tracked boutiques) ---------- */
-const bqMedian = (xs) => { const v = xs.filter((x) => x != null).sort((a, b) => a - b);
-  return v.length ? v[Math.floor(v.length / 2)] : null; };
+const bqMedian = (xs) => { const v = xs.filter((x) => x != null).sort((a, b) => a - b), n = v.length;
+  return n ? (n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2) : null; };
 const bqStoreName = (d) => (DATA.stores && DATA.stores[d] && DATA.stores[d].name)
   || (typeof STORE_NAMES !== "undefined" && STORE_NAMES[d]) || d;
 const bqStoreCount = () => Object.keys(DATA.stores || {}).length
   || (typeof STORE_NAMES !== "undefined" ? Object.keys(STORE_NAMES).length : 19);
-function bqCompetitors(m, myStore) {
+function bqCompetitors(m, myStore, mine = []) {
+  const cws = bqMarketCws(m);
+  if (cws.length) return bqCwCompetitors(m, myStore, mine, cws);
   const sizesBy = {};
   (m.size_sources || []).filter((x) => x.kind === "boutique").forEach((x) => {
     sizesBy[x.source] = x.sizes.filter((z) => z.available).map((z) => bqSize(z.size)).filter(Boolean)
@@ -190,6 +236,31 @@ function bqCompetitors(m, myStore) {
       title: c.title, left: c.avail, total: c.total, sizes: [...new Set(sizesBy[c.store] || [])],
       comparable: !!c.price && inBand && !used, used };
   }).sort((a, b) => (b.left > 0) - (a.left > 0) || (a.price ?? 1e9) - (b.price ?? 1e9));
+}
+
+// one row per store and colorway (consignment shops list each size separately)
+function bqCwCompetitors(m, myStore, mine, cws) {
+  const ref = m.resale_last || m.retail;
+  const rows = [];
+  cws.forEach((c) => {
+    const same = !c.kids && mine.some((x) => bqSameCw(c.code, c.name, x.code, x.name) && (!c.womens || /women|wmns|\(w\)/i.test(x.name || "")));
+    const by = {};
+    c.listings.filter((l) => l.store !== myStore).forEach((l) => {
+      const r = by[l.store] = by[l.store] || { store: l.store, name: bqStoreName(l.store), prices: [], left: 0, total: 0,
+        sizes: new Set(), url: l.url || (l.h ? `https://${l.store}/products/${l.h}` : null), title: l.title,
+        colorway: c.name, code: c.code, same, used: false };
+      if (l.price) r.prices.push(l.price);
+      r.left += l.left; r.total += l.total;
+      (l.sizes_left || []).forEach((z) => { const k = bqSize(z); if (k) r.sizes.add(k); });
+      if (/\b(used|pre-?owned|worn)\b/i.test(`${l.title || ""} ${l.h || ""}`)) r.used = true;
+    });
+    Object.values(by).forEach((r) => {
+      const price = r.prices.length ? Math.min(...r.prices) : null;
+      const inBand = price && ref ? price >= 0.5 * ref && price <= 2 * ref : !!price;
+      rows.push({ ...r, price, sizes: [...r.sizes].sort((a, b) => a - b), comparable: !!price && inBand && !r.used });
+    });
+  });
+  return rows.sort((a, b) => (b.same - a.same) || (b.left > 0) - (a.left > 0) || (a.price ?? 1e9) - (b.price ?? 1e9));
 }
 
 /* ---------- local demand ----------
@@ -333,7 +404,14 @@ function bqAnalyze(rows, myStore) {
   rows.forEach((r) => {
     const hit = bqMatch(r, index);
     if (!hit) { untracked.set(r.title, (untracked.get(r.title) || 0) + (r.qty || 0)); return; }
-    const e = shoes.get(hit.m.slug) || { m: hit.m, how: hit.how, sizes: {}, colors: new Set(), units: 0, sold: null, prices: [] };
+    const e = shoes.get(hit.m.slug) || { m: hit.m, how: hit.how, sizes: {}, colors: new Set(), units: 0, sold: null, prices: [], cws: new Map() };
+    const code = bqStyleCode(r.sku, hit.m.brand) || bqStyleCode(r.title, hit.m.brand);
+    if (code || r.color) {
+      const k = code || [...bqNameKey(r.color)].sort().join(" ");
+      const x = e.cws.get(k) || { code, name: r.color || null, units: 0 };
+      x.code = x.code || code; x.name = x.name || r.color || null; x.units += r.qty || 0;
+      e.cws.set(k, x);
+    }
     if (r.price) e.prices.push(r.price);
     if (r.size) e.sizes[r.size] = (e.sizes[r.size] || 0) + (r.qty || 0);
     if (r.color) e.colors.add(r.color);
@@ -354,15 +432,34 @@ function bqAnalyze(rows, myStore) {
           .filter((sz) => !(sz in e.sizes)).map((sz) => ({ size: sz, ...scoreOf(sz) }))
           .filter((x) => x.score >= 0.6).map((x) => x.size)
       : [];
-    const mine = [...e.colors].map((c) => c.toLowerCase());
+    // the shop's colorways: from its SKUs/colors, else (picked a tracked store
+    // and the file has neither) from that store's own public listings
+    let mineCw = [...e.cws.values()];
+    const market = bqMarketCws(e.m);
+    if (!mineCw.length && myStore) {
+      mineCw = market.filter((c) => c.listings.some((l) => l.store === myStore))
+        .map((c) => ({ code: c.code, name: c.name, units: null, fromSite: true }));
+    }
+    mineCw.forEach((x) => { x.market = market.find((c) => bqSameCw(c.code, c.name, x.code, x.name)) || null; });
+    const legacy = (e.m.colorways || []).length > 0 && !market.length;
+    const mineLower = [...e.colors].map((c) => c.toLowerCase());
     const colorways = (e.m.colorways || []).map((c) => ({
-      ...c, carried: mine.some((x) => bqTokens(c.name).size && [...bqTokens(c.name)].every((t) => x.includes(t))),
+      ...c, carried: legacy
+        ? mineLower.some((x) => bqTokens(c.name).size && [...bqTokens(c.name)].every((t) => x.includes(t)))
+        : !c.kids && mineCw.some((x) => bqSameCw(c.code, c.name, x.code, x.name) && (!c.womens || /women|wmns|\(w\)/i.test(x.name || ""))),
     }));
-    const comps = bqCompetitors(e.m, myStore);
+    const toAdd = colorways.filter((c) => !c.carried && !legacy && bqSellingOut(c))
+      .sort((a, b) => bqCwDemand(b) - bqCwDemand(a)).slice(0, 2);
+    const comps = bqCompetitors(e.m, myStore, mineCw);
     const myPrice = bqMedian(e.prices);
-    const compPrice = bqMedian(comps.filter((c) => c.comparable).map((c) => c.price));
-    return { ...e, verdict: v, sizes, missingSizes, colorways, comps, myPrice, compPrice,
-             soldOutAt: comps.filter((c) => c.left === 0).length };
+    // compare prices against the same colorway when another shop lists it
+    const sameComps = comps.filter((c) => c.same && c.comparable);
+    const compBasis = sameComps.length ? "same" : mineCw.length && !legacy ? "other" : "all";
+    const compPrice = bqMedian((sameComps.length ? sameComps : comps.filter((c) => c.comparable)).map((c) => c.price));
+    const outPool = comps.some((c) => c.same) ? comps.filter((c) => c.same) : comps;
+    const storesOf = (xs) => new Set(xs.map((c) => c.store)).size;
+    return { ...e, verdict: v, sizes, missingSizes, colorways, mineCw, toAdd, comps, myPrice, compPrice, compBasis,
+             soldOutAt: storesOf(outPool.filter((c) => c.left === 0)), compStores: storesOf(outPool) };
   });
   const order = { reorder: 0, hold: 1, "hold-off": 2, markdown: 3 };
   out.sort((a, b) => order[a.verdict.key] - order[b.verdict.key] || (b.m.hype ?? 0) - (a.m.hype ?? 0));
@@ -372,11 +469,16 @@ function bqAnalyze(rows, myStore) {
   const missing = shelf.recs.map((r) => r.m);
   // which competitors overlap most with this store's shelves
   const byStore = {};
-  out.forEach((e) => e.comps.forEach((c) => {
-    const b = byStore[c.store] = byStore[c.store] || { name: c.name, shoes: 0, inStock: 0, gaps: [] };
-    b.shoes++; if (c.left > 0) b.inStock++;
-    if (e.myPrice && c.comparable) b.gaps.push(c.price - e.myPrice);
-  }));
+  out.forEach((e) => {
+    const seen = {};
+    e.comps.forEach((c) => {
+      const b = byStore[c.store] = byStore[c.store] || { name: c.name, shoes: 0, inStock: 0, gaps: [] };
+      const s0 = seen[c.store] = seen[c.store] || { counted: false, stocked: false };
+      if (!s0.counted) { b.shoes++; s0.counted = true; }
+      if (c.left > 0 && !s0.stocked) { b.inStock++; s0.stocked = true; }
+      if (e.myPrice && c.comparable && (c.same || e.compBasis !== "same")) b.gaps.push(c.price - e.myPrice);
+    });
+  });
   const overview = Object.values(byStore).sort((a, b) => b.shoes - a.shoes || b.inStock - a.inStock)
     .map((b) => ({ ...b, gap: bqMedian(b.gaps) }));
   BQ_LAST = { out, untracked: [...untracked.entries()], missing, shelf, rows: rows.length, overview, myStore, state };
@@ -411,8 +513,7 @@ function bqRender(rep) {
         ${e.missingSizes.length ? `<p class="bq-note"><b>Not stocked, but in demand:</b> sizes ${e.missingSizes.join(", ")}.</p>` : ""}
         ${bqOutlook(e)}
         ${bqCompBlock(e)}
-        ${e.colorways.length ? `<p class="bq-note"><b>Colorways in the market:</b> ${e.colorways.slice(0, 4).map((c) =>
-          `${esc(c.name)} ($${Math.round(c.price_low)}${c.price_high !== c.price_low ? `–$${Math.round(c.price_high)}` : ""}, ${c.stores} store${c.stores === 1 ? "" : "s"})${c.carried ? " ✓ you carry" : ""}`).join(" · ")}</p>` : ""}
+        ${bqCwBlock(e)}
       </div>
     </article>`).join("");
   el.innerHTML = `
@@ -464,17 +565,22 @@ function bqOutlook(e) {
 
 function bqCompBlock(e) {
   if (!e.comps.length) return `<p class="bq-note"><b>Competitors:</b> none of the ${bqStoreCount()} tracked boutiques list it right now.</p>`;
-  const inStock = e.comps.filter((c) => c.left > 0).length;
+  const nStores = new Set(e.comps.map((c) => c.store)).size;
+  const inStock = new Set(e.comps.filter((c) => c.left > 0).map((c) => c.store)).size;
+  const sameN = new Set(e.comps.filter((c) => c.same).map((c) => c.store)).size;
   const priced = e.comps.filter((c) => c.comparable).map((c) => c.price);
   const from = priced.length ? `from $${Math.round(Math.min(...priced))}` : "";
   let gap = "";
   if (e.myPrice && e.compPrice) {
     const d = Math.round(e.myPrice - e.compPrice);
-    gap = Math.abs(d) < 5 ? `Your price ($${Math.round(e.myPrice)}) is in line with the median competitor.`
-      : `Your price ($${Math.round(e.myPrice)}) is <b>$${Math.abs(d)} ${d > 0 ? "above" : "below"}</b> the median competitor ($${Math.round(e.compPrice)}).`;
+    const vs = e.compBasis === "same" ? "the median competitor for your colorway"
+      : e.compBasis === "other" ? "the median competitor (other colorways — no tracked shop lists yours)" : "the median competitor";
+    gap = Math.abs(d) < 5 ? `Your price ($${Math.round(e.myPrice)}) is in line with ${vs}.`
+      : `Your price ($${Math.round(e.myPrice)}) is <b>$${Math.abs(d)} ${d > 0 ? "above" : "below"}</b> ${vs} ($${Math.round(e.compPrice)}).`;
   }
+  const cs = e.compStores || nStores;
   const scarce = e.soldOutAt && e.units > 0
-    ? `Sold out at ${e.soldOutAt} of ${e.comps.length} other store${e.comps.length === 1 ? "" : "s"} — you're one of the few with stock.` : "";
+    ? `${e.compBasis === "same" ? "Your colorway is sold" : "Sold"} out at ${e.soldOutAt} of ${cs} other store${cs === 1 ? "" : "s"} — you're one of the few with stock.` : "";
   // public-shelf report (a cold-outreach PDF): the 5 most useful rows, in stock and cheapest first
   const COMP_CAP = 5;
   const shown = window.BQ_PUBLIC
@@ -482,14 +588,47 @@ function bqCompBlock(e) {
     : e.comps;
   const more = e.comps.length - shown.length;
   const rows = shown.map((c) => `<tr>
-      <td><a href="${c.url || `https://${c.store}`}" target="_blank" rel="noopener">${esc(c.name)} ↗</a>${c.title ? `<small class="bq-ptitle">${esc(c.title)}</small>` : ""}</td>
+      <td><a href="${c.url || `https://${c.store}`}" target="_blank" rel="noopener">${esc(c.name)} ↗</a>${c.colorway !== undefined
+        ? `<small class="bq-cwtag${c.same ? " same" : ""}">${c.same ? "Your colorway · " : ""}${esc(c.colorway || c.code || "colorway not stated")}${c.code && c.colorway && c.code !== c.colorway ? ` · ${esc(c.code)}` : ""}</small>`
+        : c.title ? `<small class="bq-ptitle">${esc(c.title)}</small>` : ""}</td>
       <td class="num">${c.price ? "$" + Math.round(c.price) : "—"}${c.price && !c.comparable ? `<small class="bq-ptitle" title="Looks like a different listing (${c.used ? "used pair" : "price far from this shoe's usual range"}), so it's left out of price comparisons">not compared</small>` : ""}</td>
       <td>${c.left === 0 ? `<span class="bq-out">Sold out</span>` : `${c.left} of ${c.total} sizes left${c.sizes.length ? `: ${c.sizes.slice(0, 8).join(", ")}${c.sizes.length > 8 ? "…" : ""}` : ""}`}</td></tr>`).join("");
   return `<details class="bq-comp">
-      <summary><b>Competitors:</b> ${e.comps.length} store${e.comps.length === 1 ? "" : "s"} carry it · ${inStock} in stock ${from ? "· " + from : ""}</summary>
+      <summary><b>Competitors:</b> ${nStores} store${nStores === 1 ? "" : "s"} carry it${sameN ? ` (${sameN} in your colorway)` : ""} · ${inStock} in stock ${from ? "· " + from : ""}</summary>
       ${gap || scarce ? `<p class="bq-note">${[gap, scarce].filter(Boolean).join(" ")}</p>` : ""}
       <table class="bq-table"><thead><tr><th>Store</th><th class="num">Price</th><th>Sizes</th></tr></thead><tbody>${rows}${more > 0 ? `<tr><td colspan="3" class="bq-fine">+ ${more} more store${more === 1 ? "" : "s"} (full list at solesight.xyz/boutiques.html)</td></tr>` : ""}</tbody></table>
     </details>`;
+}
+
+function bqCwBlock(e) {
+  const legacy = (e.m.colorways || []).length > 0 && !bqMarketCws(e.m).length;
+  if (legacy) {
+    return e.colorways.length ? `<p class="bq-note"><b>Colorways in the market:</b> ${e.colorways.slice(0, 4).map((c) =>
+      `${esc(c.name)} ($${Math.round(c.price_low)}${c.price_high !== c.price_low ? `–$${Math.round(c.price_high)}` : ""}, ${c.stores} store${c.stores === 1 ? "" : "s"})${c.carried ? " ✓ you carry" : ""}`).join(" · ")}</p>` : "";
+  }
+  const pct = (x) => (x == null ? "—" : Math.round(x * 100) + "%");
+  const mine = e.mineCw || [];
+  const MINE_CAP = 4;
+  const yours = mine.length ? `<p class="bq-note"><b>Your colorway${mine.length === 1 ? "" : "s"}:</b> ${mine.slice(0, MINE_CAP).map((x) =>
+      `${esc(x.name || (x.market && x.market.name) || x.code)}${x.code && x.code !== (x.name || (x.market && x.market.name)) ? ` (${esc(x.code)})` : ""}${x.units != null ? ` · ${x.units} pair${x.units === 1 ? "" : "s"}` : ""}${
+        x.market ? (bqSellingOut(x.market) ? " · <b>selling out elsewhere</b>" : "") : " · no tracked shop lists it"}`).join("; ")}${
+        mine.length > MINE_CAP ? `; and ${mine.length - MINE_CAP} more` : ""}</p>`
+    : `<p class="bq-fine">Add a style code or color column to your file to see how your colorways are doing.</p>`;
+  const add = e.toAdd.length ? `<p class="bq-note bq-cwadd"><b>Colorway${e.toAdd.length === 1 ? "" : "s"} to add:</b> ${e.toAdd.map((c) =>
+      `${esc(c.name)}${c.code && c.code !== c.name ? ` (${esc(c.code)})` : ""} — ${c.sold_7d ? `${c.sold_7d} size${c.sold_7d === 1 ? "" : "s"} sold out this week, ` : ""}${pct(c.sold_out_share)} of sizes gone across ${c.stores} shop${c.stores === 1 ? "" : "s"}`).join("; ")}.</p>` : "";
+  const rows = [...e.colorways].sort((a, b) => (b.carried - a.carried) || bqCwDemand(b) - bqCwDemand(a)).slice(0, 6);
+  const more = e.colorways.length - rows.length;
+  const table = rows.length ? `<table class="bq-table bq-cwtable"><thead><tr><th>Colorway</th><th class="num cw-x">Shops</th>
+      <th class="num cw-x">Sizes left</th><th class="num">Sold out</th><th class="num">This week</th><th>You</th></tr></thead><tbody>
+      ${rows.map((c) => `<tr><td>${esc(c.name || c.code)}${c.code && c.name && c.code !== c.name ? `<small class="bq-ptitle">${esc(c.code)}</small>` : ""}${
+        bqSellingOut(c) ? ` <span class="bq-hot">selling out</span>` : ""}</td>
+        <td class="num cw-x">${c.stores}</td><td class="num cw-x">${c.sizes_left} of ${c.sizes_total}</td>
+        <td class="num">${pct(c.sold_out_share)}</td><td class="num">${c.sold_7d ? c.sold_7d + " size" + (c.sold_7d === 1 ? "" : "s") : "—"}</td>
+        <td>${c.carried ? "✓" : "—"}</td></tr>`).join("")}
+      ${more > 0 ? `<tr><td colspan="6" class="bq-fine">+ ${more} more colorway${more === 1 ? "" : "s"} at tracked shops</td></tr>` : ""}</tbody></table>` : "";
+  return `<div class="bq-cw">${yours}${add}${rows.length ? `<details class="bq-comp bq-cwd"${e.toAdd.length ? " open" : ""}>
+      <summary><b>Colorways in the market:</b> ${e.colorways.length} at tracked shops</summary>${table}
+      <p class="bq-fine">"Sold out" is the share of listed sizes with none left; "this week" counts sizes that went from in stock to sold out.</p></details>` : ""}</div>`;
 }
 
 function bqShelfBlock(rep) {
@@ -590,16 +729,19 @@ window.addEventListener("afterprint", bqAfterPrint);
 
 function bqDownload() {
   if (!BQ_LAST) return;
-  const lines = [["shoe", "action", "why", "size", "in_stock", "size_advice",
+  const lines = [["shoe", "your_colorways", "colorways_to_add", "action", "why", "size", "in_stock", "size_advice",
                   "competitors_carrying", "competitors_sold_out", "median_competitor_price", "your_price",
                   "ebay_ask_today", "predicted_resale_30d", "predicted_low", "predicted_high", "predicted_change_pct"]];
   BQ_LAST.out.forEach((e) => {
     const o = e.m.price_outlook && e.m.price_outlook.ok ? e.m.price_outlook : null;
     const c = [e.comps.length, e.soldOutAt, e.compPrice ? Math.round(e.compPrice) : "", e.myPrice ? Math.round(e.myPrice) : "",
                o ? o.now : "", o ? o.in30 : "", o ? o.lo : "", o ? o.hi : "", o ? o.change_pct : ""];
-    if (!e.sizes.length) lines.push([e.m.name, e.verdict.label, e.verdict.why, "", e.units, "", ...c]);
-    e.sizes.forEach((s) => lines.push([e.m.name, e.verdict.label, e.verdict.why, s.size, s.qty, s.verdict, ...c]));
-    e.missingSizes.forEach((sz) => lines.push([e.m.name, e.verdict.label, e.verdict.why, sz, 0, "restock (not stocked)", ...c]));
+    const cwMine = (e.mineCw || []).map((x) => x.name || x.code).filter(Boolean).join(" | ");
+    const cwAdd = (e.toAdd || []).map((x) => x.name).join(" | ");
+    const head = [e.m.name, cwMine, cwAdd, e.verdict.label, e.verdict.why];
+    if (!e.sizes.length) lines.push([...head, "", e.units, "", ...c]);
+    e.sizes.forEach((s) => lines.push([...head, s.size, s.qty, s.verdict, ...c]));
+    e.missingSizes.forEach((sz) => lines.push([...head, sz, 0, "restock (not stocked)", ...c]));
   });
   const csv = lines.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
   const a = document.createElement("a");
@@ -626,6 +768,8 @@ function bqSummary() {
     top_reorder: reorder.slice(0, 3).map((e) => e.m.name),
     hot_missing: r.missing.slice(0, 3).map((m) => m.name),
     sold_fast: (r.sold ? r.sold.rows : []).slice(0, 3).map((x) => x.m.name),
+    colorways_to_add: r.out.flatMap((e) => (e.toAdd || []).map((c) => ({ shoe: e.m.name, name: c.name, d: bqCwDemand(c) })))
+      .sort((a, b) => b.d - a.d).slice(0, 3).map((x) => `${x.shoe} ${x.name}`),
     sold_fast_near: !!(r.sold && r.sold.key === "near"),
   };
 }
@@ -684,6 +828,15 @@ function bcMarket(m, st) {
   return Object.keys(sizes).length ? { ...sg, typical: bcMedian(Object.values(sizes)), sizes, outliers } : null;
 }
 const BC_SG_OUTLIER = 1.6;
+// eBay sold prices (data.json "sold", last 90 days) when SoleSight has access
+function bcSold(m, st) {
+  const so = m.sold;
+  if (!so) return null;
+  if (st.cond === "Used") return so.used_median ? { shoe: so.used_median, n: so.used_n, sizes: {} } : null;
+  const sizes = {};
+  Object.entries(so.by_size || {}).forEach(([k, v]) => { const z = bqSize(k); if (z) sizes[z] = v; });
+  return { shoe: so.new_median, n: so.new_n, sizes };
+}
 function bcCompute(m, st) {
   // per-size medians over every distinct listing in the last 14 days (size_asks);
   // older data files only had the cheapest listing per size (size_sources)
@@ -694,35 +847,44 @@ function bcCompute(m, st) {
   const pooled = bcMedian(Object.values(asks).map((v) => v.median));
   const ebayShoe = (st.cond === "Deadstock" ? (m.resale_last || pooled) : pooled) || null;
   const sg = bcMarket(m, st);
-  const src = sg ? st.src : "ebay";
+  const sold = bcSold(m, st);
+  const src = st.src === "sold" ? (sold ? "sold" : "ebay") : sg ? st.src : "ebay";
   // eBay / Stadium Goods / the lower of the two; falls back to whichever exists
   const pickAsk = (eb, sgv) => {
     if (eb == null) return sgv;
     if (sgv == null) return eb;
     return src === "sg" ? sgv : src === "low" ? Math.min(eb, sgv) : eb;
   };
-  const shoeAsk = pickAsk(ebayShoe, sg ? sg.typical : null);
+  const shoeAsk = src === "sold" ? sold.shoe : pickAsk(ebayShoe, sg ? sg.typical : null);
   const o = m.price_outlook;
   const trend = st.outlook && o && o.ok && o.change_pct < 0 ? 1 + o.change_pct / 100 : 1;
+  // sold prices are what pairs went for: no "% of the ask" discount
+  const realize = src === "sold" ? 1 : st.real;
   const row = (ask) => {
-    const sells = ask * st.real * trend;
+    const sells = ask * realize * trend;
     return { ask, sells, pay: Math.max(0, Math.floor(sells * (1 - st.fee - st.margin) / 5) * 5) };
   };
   // An eBay size gets its own price only with >=3 listings; one optimistic ask
   // shouldn't make a shop overpay. Otherwise it uses the typical-pair price.
   // A Stadium Goods size price is that store's own lowest ask, so it stands alone.
-  const all = [...new Set([...Object.keys(asks), ...Object.keys(sg ? sg.sizes : {})])].sort((a, b) => a - b);
+  const all = [...new Set([...Object.keys(asks), ...Object.keys(sg ? sg.sizes : {}),
+    ...Object.keys(sold ? sold.sizes : {})])].sort((a, b) => a - b);
   const sizes = all.map((sz) => {
     const e = asks[sz], own = !!e && e.n >= BC_MIN_SIZE_LISTINGS;
     const sgv = sg ? (sg.sizes[sz] ?? null) : null;
+    const sv = sold && sold.sizes[sz] ? sold.sizes[sz] : null;     // 3+ sales in this size
     const eb = own ? e.median : ebayShoe;
-    const ask = sgv == null ? (eb ?? shoeAsk) : pickAsk(eb, sgv);
-    // greyed out unless this size's own price (eBay with 3+ listings, or Stadium Goods) set it
-    const priced = (own && ask === eb) || (sgv != null && ask === sgv);
-    return { size: sz, n: e ? e.n : 0, own, ebay: own ? e.median : null, sg: sgv,
+    let ask, priced;
+    if (src === "sold") { ask = sv ? sv.median : sold.shoe; priced = !!sv; }
+    else {
+      ask = sgv == null ? (eb ?? shoeAsk) : pickAsk(eb, sgv);
+      // greyed out unless this size's own price (eBay with 3+ listings, or Stadium Goods) set it
+      priced = (own && ask === eb) || (sgv != null && ask === sgv);
+    }
+    return { size: sz, n: e ? e.n : 0, own, ebay: own ? e.median : null, sg: sgv, sold: sv,
              sgOut: sg ? (sg.outliers[sz] ?? null) : null, priced, ...row(ask) };
   });
-  return { sizes, shoe: shoeAsk ? row(shoeAsk) : null, trend, n, sg, src };
+  return { sizes, shoe: shoeAsk ? row(shoeAsk) : null, trend, n, sg, sold, src };
 }
 function bcRender() {
   const out = $("#bc-out");
@@ -735,7 +897,11 @@ function bcRender() {
   const used = st.cond === "Used";
   if (!r.shoe) { out.innerHTML = `<p class="bq-empty">No ${used ? "used" : "new"} asks for this shoe right now.</p>`; return; }
   const money = (v) => "$" + Math.round(v);
-  const srcName = { ebay: "eBay", sg: "Stadium Goods", low: "the lower of eBay and Stadium Goods" }[r.src];
+  const srcName = { ebay: "eBay asks", sg: "Stadium Goods", low: "the lower of eBay and Stadium Goods",
+    sold: "eBay sold prices (last 90 days)" }[r.src];
+  const soldNote = st.src === "sold" && !r.sold
+    ? (DATA.models.some((x) => x.sold) ? "Not enough eBay sales of this shoe in the last 90 days, so prices come from eBay asks."
+      : "eBay sold prices aren't available yet, so prices come from eBay asks.") : "";
   const sgNote = used ? "Stadium Goods sells new pairs only, so used prices come from eBay."
     : !r.sg && DATA.models.some((x) => x.marketplaces && x.marketplaces.stadiumgoods)
       ? "Stadium Goods doesn't list this shoe right now, so prices come from eBay." : "";
@@ -748,19 +914,21 @@ function bcRender() {
           eBay ${m.resale_last ? money(m.resale_last) : "—"} ·
           <a href="${r.sg.url}" target="_blank" rel="noopener">Stadium Goods</a> ${money(r.sg.typical)}</span>` : ""}
         ${r.trend < 1 ? `<span class="bc-note">Prices lowered ${Math.round((1 - r.trend) * 100)}% — the 30-day forecast expects them to fall.</span>` : ""}
+        ${r.sold ? `<span class="bc-src">eBay sold: typical ${money(r.sold.shoe)} over ${r.sold.n} ${used ? "used" : "new"} sale${r.sold.n === 1 ? "" : "s"} in 90 days${r.src === "sold" ? " — priced off these" : ""}.</span>` : ""}
+        ${soldNote ? `<span class="bc-note">${soldNote}</span>` : ""}
         ${sgNote ? `<span class="bc-note">${sgNote}</span>` : ""}</div></div>
     ${r.sizes.some((z) => z.priced) ? `<table class="bq-table bc-table"><thead><tr><th>Size</th><th class="num">eBay ask</th>
-      <th class="num">eBay listings</th>${r.sg ? `<th class="num">Stadium Goods</th>` : ""}<th class="num">Sells for</th><th class="num">Pay at most</th></tr></thead><tbody>
+      <th class="num">eBay listings</th>${r.sold ? `<th class="num">eBay sold</th>` : ""}${r.sg ? `<th class="num">Stadium Goods</th>` : ""}<th class="num">Sells for</th><th class="num">Pay at most</th></tr></thead><tbody>
       ${r.sizes.map((z) => `<tr${z.priced ? "" : ' class="thin"'}><td>${z.size}</td>
         <td class="num">${z.ebay != null ? money(z.ebay) : z.n ? "typical" : "—"}</td>
-        <td class="num">${z.n || "—"}</td>${r.sg ? `<td class="num">${z.sg != null ? money(z.sg) : z.sgOut != null
+        <td class="num">${z.n || "—"}</td>${r.sold ? `<td class="num">${z.sold ? `${money(z.sold.median)}<small class="bq-ptitle">${z.sold.n} sold</small>` : "—"}</td>` : ""}${r.sg ? `<td class="num">${z.sg != null ? money(z.sg) : z.sgOut != null
           ? `<s title="Far from Stadium Goods' other sizes, so it isn't used">${money(z.sgOut)}</s>` : "—"}</td>` : ""}
         <td class="num">${money(z.sells)}</td><td class="num"><b>${money(z.pay)}</b></td></tr>`).join("")}</tbody></table>`
       : `<p class="bq-fine">Not enough listings per size yet to price sizes separately — the typical-pair
         price above applies to every size.</p>`}
     <p class="bq-fine">From ${r.n} current eBay ${used ? "used" : "new"} listings${r.sg ? ` and Stadium Goods' lowest new-pair ask in ${Object.keys(r.sg.sizes).length} sizes (checked ${r.sg.date})` : ""}
       — asking prices, not completed sales. An eBay size gets its own price only with ${BC_MIN_SIZE_LISTINGS}+ listings; otherwise it
-      uses the typical-pair price (greyed out). A Stadium Goods size priced far from its other sizes is crossed out and not used. StockX and GOAT don't share their prices openly, so they aren't included.
+      uses the typical-pair price (greyed out).${r.sold ? ` Sold prices: a size gets its own with 3+ sales; sold prices aren't discounted by "% of the ask".` : ""} A Stadium Goods size priced far from its other sizes is crossed out and not used. StockX and GOAT don't share their prices openly, so they aren't included.
       Always check the pair is authentic.</p>`;
   $$("#bc-out [data-slug]").forEach((x) => (x.onclick = () => openSheet(x.dataset.slug)));
 }
@@ -777,6 +945,7 @@ function initBuyCalc() {
   try {
     const saved = JSON.parse(localStorage.getItem("bc-settings") || "{}");
     BC_KEYS.forEach((k) => { if (saved[k] != null && $("#bc-" + k)) $("#bc-" + k).value = saved[k]; });
+    if (saved.src == null && $("#bc-src") && DATA.models.some((x) => x.sold)) $("#bc-src").value = "sold";
   } catch (_) {}
   ["bc-shoe", "bc-cond", "bc-src", "bc-fee", "bc-margin", "bc-real", "bc-outlook"].forEach((id) => {
     const el = $("#" + id);                 // a cached older page may lack a control

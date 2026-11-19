@@ -1643,3 +1643,38 @@ html, body { overflow-x: hidden; }
 .dp-bar { display: block; height: 10px; background: var(--acid); border: 1px solid var(--ink); min-width: 1px; }
 .dp-table tr.thin .dp-bar { opacity: .3; }
 .bq-link { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; color: inherit; }
+
+/* colorways */
+.bq-cwtag { display: block; font-size: .72rem; color: var(--ink-3); margin-top: 2px; }
+.bq-cwtag.same { color: var(--ink); font-weight: 600; }
+.bq-hot { display: inline-block; font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600;
+  background: var(--acid); color: var(--ink); padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+.bq-cwtable td small.bq-ptitle { display: block; }
+.bq-cwadd { border-left: 3px solid var(--acid); padding-left: 8px; }
+@media print { body.printing-bq .bq-cwd > summary { list-style: none; } }
+@media (max-width: 760px) {
+  .bq-cwtable { font-size: .8rem; }
+  .bq-cwtable td, .bq-cwtable th { padding: 7px 4px; }
+  .bq-cwtable th.num { white-space: normal; }
+  .bq-cwtable .cw-x { display: none; }    /* shops + sizes left: shown on wider screens */
+  .bq-cwtable { width: 100%; table-layout: fixed; }
+  .bq-cwtable th:first-child { width: 44%; }
+  .bq-cwtable td:first-child { overflow-wrap: anywhere; }
+}
+/* the card's text column may shrink below its widest table (1fr alone won't) */
+.bq-shoe { grid-template-columns: 150px minmax(0, 1fr); }
+@media (max-width: 760px) { .bq-shoe { grid-template-columns: 96px minmax(0, 1fr); } }
+@media print { body.printing-bq .bq-shoe { grid-template-columns: 110px minmax(0, 1fr); } }
+/* phones: every report table fits the screen (headers wrap, long text breaks) */
+@media (max-width: 760px) {
+  #bq-out .bq-table { width: 100%; table-layout: fixed; }
+  #bq-out .bq-table th, #bq-out .bq-table th.num { white-space: normal; letter-spacing: .02em; line-height: 1.25; vertical-align: bottom; }
+  #bq-out .bq-table td { overflow-wrap: anywhere; }
+  #bq-out .bq-table td.num { white-space: normal; }
+  #bq-out .bq-table th:first-child { width: 40%; }
+  #bq-out .bq-overview th:first-child { width: 34%; }
+}
+@media print {
+  body.printing-bq .bq-cwtable .cw-x { display: table-cell; }
+  body.printing-bq #bq-out .bq-table { table-layout: auto; }
+}
