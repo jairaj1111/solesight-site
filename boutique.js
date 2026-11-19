@@ -509,6 +509,7 @@ function bqRender(rep) {
         ${e.sizes.length ? `<div class="bq-sizes">${e.sizes.map((s) => `
           <span class="bq-size ${s.verdict}" title="Demand ${Math.round(s.score * 100)}/100 · ${s.seen ? `${s.seen} tracked store listing${s.seen === 1 ? "" : "s"}` : "market-wide size curve"}${s.ask ? ` · eBay ask $${Math.round(s.ask)}` : ""}">
             <b>${s.size}</b><small>${window.BQ_PUBLIC ? (s.qty ? "in stock" : "sold out") : s.qty} · ${lbl[s.verdict]}</small></span>`).join("")}</div>` : ""}
+        ${typeof outlookNote === "function" ? outlookNote(e.m, "bq-note") : ""}
         ${bqLocalText(e.m, rep.state) ? `<p class="bq-note"><b>Near you:</b> ${esc(bqLocalText(e.m, rep.state))}.</p>` : ""}
         ${e.missingSizes.length ? `<p class="bq-note"><b>Not stocked, but in demand:</b> sizes ${e.missingSizes.join(", ")}.</p>` : ""}
         ${bqOutlook(e)}

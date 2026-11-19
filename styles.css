@@ -1678,3 +1678,10 @@ html, body { overflow-x: hidden; }
   body.printing-bq .bq-cwtable .cw-x { display: table-cell; }
   body.printing-bq #bq-out .bq-table { table-layout: auto; }
 }
+
+/* next month: signal test + 30-day outlook */
+.nm-body { margin-top: 46px; }
+.nm-h { font-size: 1.35rem; font-weight: 600; letter-spacing: -.02em; margin: 30px 0 6px; }
+.nm-table { margin: 14px 0 8px; }
+.ol-note { margin: 6px 0 12px; padding: 8px 10px; border-left: 3px solid var(--ink-3); font-size: .88rem; color: var(--ink-2); background: var(--paper-2, #f6f6f3); }
+@media (max-width: 760px) { .nm-table { font-size: .82rem; } .nm-table th { white-space: normal; } }

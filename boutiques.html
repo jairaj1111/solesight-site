@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=66" />
+  <link rel="stylesheet" href="styles.css?v=67" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -270,6 +270,7 @@
         question, <em>when a shoe was flagged rising, did that demand still hold
         weeks later?</em></p>
       <div class="bt-body" id="bt-body"><!-- filled by JS from data.json --></div>
+      <div class="nm-body" id="nm-body"><!-- next month: signal test + 30-day outlook --></div>
     </section>
 
 
@@ -294,7 +295,7 @@
           <p>Launch Radar flags demand spikes ≥3× each model's trailing
             baseline and labels every lifecycle stage.</p></div>
         <div class="sys-step reveal"><span class="sys-n">05</span><h3>Score &amp; explain</h3>
-          <p>Five weighted signals blend into a 0–100 Hype Score, plus a
+          <p>Four weighted signals blend into a 0–100 Hype Score, plus a
             plain-English insight per model.</p></div>
         <div class="sys-step reveal"><span class="sys-n">06</span><h3>Publish</h3>
           <p>Everything lands in one static <code>data.json</code>; GitHub
@@ -314,7 +315,7 @@
 
       <!-- signal provenance — every score input traced to its source -->
       <h3 class="prov-title">Signal provenance — every number, traced</h3>
-      <p class="prov-sub">The Hype Score is five weighted signals. Here's exactly
+      <p class="prov-sub">The Hype Score is four weighted signals. Here's exactly
         where each one comes from and how live it is — nothing black-box.</p>
       <div class="prov">
         <div class="prov-row prov-head">
@@ -327,22 +328,16 @@
           <span><em class="sig-badge live">live</em></span>
         </div>
         <div class="prov-row">
-          <span><b>Search momentum</b> <i>.24</i></span>
-          <span>Google Trends — recent 14 days vs. the prior 14</span>
+          <span><b>Search demand</b> <i>.42</i></span>
+          <span>Google Trends — two parts: growth, the last 14 days vs. the 14 before (.24), and level vs. the shoe's own peak (.18)</span>
           <span><code>trends</code> ← google_trends.py</span>
           <span><em class="sig-badge live">live</em></span>
         </div>
         <div class="prov-row">
-          <span><b>Search interest</b> <i>.18</i></span>
-          <span>Google Trends — same rows, level vs. the model's own peak</span>
-          <span><code>trends</code></span>
-          <span><em class="sig-badge live">live</em></span>
-        </div>
-        <div class="prov-row">
           <span><b>Social buzz</b> <i>.20</i></span>
-          <span>Bluesky + YouTube live · Instagram/TikTok modeled (no viable API)</span>
+          <span>Bluesky, YouTube, Reddit + Mastodon posts and engagement · Instagram/TikTok not included (no usable API)</span>
           <span><code>social</code> ← bluesky.py, social.py</span>
-          <span><em class="sig-badge part">partial</em></span>
+          <span><em class="sig-badge live">live</em></span>
         </div>
         <div class="prov-row">
           <span><b>Community mood</b> <i>.12</i></span>
@@ -381,12 +376,11 @@
             means the same thing every night.</p></div>
       </div>
 
-      <h3 class="ms-h">The 5 things, and how much each counts</h3>
+      <h3 class="ms-h">The 4 things, and how much each counts</h3>
       <div class="ms-signals">
+        <div class="ms-sig reveal"><b>42%</b><span><strong>Search demand</strong> — how much people Google it compared with its own usual, and whether that's going up or down over the last two weeks (growth counts 24%, level 18%).</span></div>
         <div class="ms-sig reveal"><b>26%</b><span><strong>Resale price</strong> — what it's listed for, new, on eBay vs. what it cost in stores.</span></div>
-        <div class="ms-sig reveal"><b>24%</b><span><strong>Search trend</strong> — are Google searches going up or down over the last two weeks?</span></div>
-        <div class="ms-sig reveal"><b>20%</b><span><strong>Social buzz</strong> — posts and views on YouTube and Bluesky. Instagram and TikTok aren't in yet: there's no free way to get their data.</span></div>
-        <div class="ms-sig reveal"><b>18%</b><span><strong>Search level</strong> — how much people are searching for it compared with its own usual.</span></div>
+        <div class="ms-sig reveal"><b>20%</b><span><strong>Social buzz</strong> — posts and views on YouTube, Bluesky, Reddit and Mastodon. Instagram and TikTok aren't included: there's no way to get their data that SoleSight can use.</span></div>
         <div class="ms-sig reveal"><b>12%</b><span><strong>Mood</strong> — are people talking about it positively or negatively? An AI model reads the posts.</span></div>
       </div>
 
@@ -405,7 +399,7 @@
             <h4>The formula</h4>
             <pre>raw   = Σ(wᵢ · vᵢ) / Σ(wᵢ)   over available signals
 score = % of all recorded daily raw scores below it</pre>
-            <p><b>Why the second line:</b> no shoe maxes all five signals at once,
+            <p><b>Why the second line:</b> no shoe maxes all four signals at once,
             so raw scores bunch low — the hottest shoe in the market sits near 50
             raw. The published Hype Score is that raw score's rank against every
             daily score recorded since July 2026, frozen as a fixed reference, so
@@ -413,8 +407,9 @@ score = % of all recorded daily raw scores below it</pre>
             same thing every night. Rankings never change — only the scale.</p>
             <p>Every component maps onto 0–100 before weighting:</p>
             <ul>
-              <li><b>Search intensity</b> — Google's 0–100 index, 14-day mean. Relative to each model's own peak, so it measures <em>how hot the model is vs. itself</em>, not raw volume across models.</li>
-              <li><b>Search momentum</b> — recent 14d vs. prior 14d percent change, mapped as <code>50 + Δ% × 0.8</code>, clamped to [0, 100]. Saturates at roughly ±62%. Skipped when the prior two weeks average under 5 on Google's scale — a percent change off a baseline that thin is noise, not signal<span id="mom-missing"></span>; those models are scored on their other signals.</li>
+              <li><b>Search demand</b> (42%) — two parts from Google Trends, each mapped to 0–100 and weighted inside it as below; if one part is missing, the other carries only its own weight.</li>
+              <li><b>· Level</b> (18%) — Google's 0–100 index, 14-day mean. Relative to each model's own peak, so it measures <em>how hot the model is vs. itself</em>, not raw volume across models.</li>
+              <li><b>· Growth</b> (24%) — recent 14d vs. prior 14d percent change, mapped as <code>50 + Δ% × 0.8</code>, clamped to [0, 100]. Saturates at roughly ±62%. Skipped when the prior two weeks average under 5 on Google's scale — a percent change off a baseline that thin is noise, not signal<span id="mom-missing"></span>; those models are scored on their other signals.</li>
               <li><b>Resale premium</b> — median price ÷ retail MSRP, mapped linearly from 0.8× (→ 0) to 2.6× (→ 100). The clamp caps extreme listings; prices are decile-trimmed before the median to drop fakes and typo listings. A model with no known retail price contributes nothing (see missing signals).</li>
               <li><b>Social buzz</b> — daily cross-platform engagement, normalized 0–100 to the model's own peak (same convention as Trends).</li>
               <li><b>Community mood</b> — per-post transformer sentiment <code>P(pos) − P(neg)</code> ∈ [−1, 1], averaged over all scored posts, mapped to 0–100.</li>
@@ -439,8 +434,8 @@ score = % of all recorded daily raw scores below it</pre>
             sold-price data is only available through paid partnerships.</li>
           <li>Google search numbers show how hot a shoe is <b>compared with its
             own history</b>, not how many people search in total.</li>
-          <li>Mood and buzz come from YouTube, Bluesky and Mastodon. Instagram
-            and TikTok aren't included — there's no free way to get their data.</li>
+          <li>Mood and buzz come from YouTube, Bluesky, Reddit and Mastodon. Instagram
+            and TikTok aren't included — there's no way to get their data that SoleSight can use.</li>
           <li>Wikipedia views, press coverage and boutique sell-outs show on each
             shoe's page but <b>don't count toward the score</b> until we've
             tested that they make it more accurate.</li>
@@ -488,9 +483,9 @@ score = % of all recorded daily raw scores below it</pre>
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=57"></script>
+  <script src="app.js?v=60"></script>
   <script src="config.js?v=1"></script>
-  <script src="boutique.js?v=28"></script>
+  <script src="boutique.js?v=29"></script>
   <script src="account.js?v=1"></script>
   <script src="ask.js?v=2"></script>
 </body>

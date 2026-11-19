@@ -116,6 +116,7 @@ async function init() {
   renderRadar();
   renderCase();
   renderBacktest();
+  renderNextMonth();
   renderWorkedExample();
   render();
   wireControls();
@@ -463,11 +464,17 @@ function renderWorkedExample() {
     interest: m.interest == null ? "—" : `${m.interest}/100`,
     sentiment: m.sentiment == null ? "—" : `${m.sentiment > 0 ? "+" : ""}${m.sentiment}`,
   };
-  const names = { resale: "Resale premium", momentum: "Search momentum",
-                  buzz: "Social buzz", interest: "Search intensity",
-                  sentiment: "Community mood" };
+  const names = { resale: "Resale premium", buzz: "Social buzz", sentiment: "Community mood" };
+  // the score is the same five-part weighted mean as before; the two Google
+  // parts are shown as one "Search demand" row (their weights add up)
   let num = 0, den = 0;
-  const rows = Object.keys(W).map((k) => {
+  const parts = ["momentum", "interest"].filter((k) => comp[k] != null);
+  parts.forEach((k) => { num += W[k] * comp[k]; den += W[k]; });
+  const sw = parts.reduce((a, k) => a + W[k], 0);
+  const sv = sw ? parts.reduce((a, k) => a + W[k] * comp[k], 0) / sw : null;
+  const searchRow = `<tr><td>Search demand</td><td>level ${raw.interest} · growth ${raw.momentum}</td>
+      <td>${sv == null ? "—" : sv.toFixed(0)}</td><td>×${sw ? +sw.toFixed(2) : 0.42}</td></tr>`;
+  const rows = searchRow + ["resale", "buzz", "sentiment"].map((k) => {
     const v = comp[k];
     if (v != null) { num += W[k] * v; den += W[k]; }
     return `<tr><td>${names[k]}</td><td>${raw[k]}</td>
@@ -998,14 +1005,13 @@ const EVENT_LABELS = {
   coverage: "coverage",
 };
 
-// live = real ingested engagement (Bluesky keyless, YouTube Data API v3);
-// modeled = no API access yet, estimated from correlated real signals —
-// matches the honesty badging in README's "Live data sources" table.
+// every platform listed is real ingested engagement; Instagram/TikTok aren't
+// collected (no usable API), so they aren't shown at all
 const PLATFORM_META = [
   { key: "bluesky", label: "Bluesky", live: true },
   { key: "youtube", label: "YouTube", live: true },
-  { key: "instagram", label: "Instagram", live: false },
-  { key: "tiktok", label: "TikTok", live: false },
+  { key: "reddit", label: "Reddit", live: true },
+  { key: "mastodon", label: "Mastodon", live: true },
 ];
 
 /* Where to buy — a real listing when we have one (eBay's cheapest live ask,
@@ -1051,6 +1057,10 @@ function openSheet(slug, opts) {
   const resalePct = m.resale_premium == null ? null
     : Math.max(0, Math.min(100, ((m.resale_premium - 0.8) / 1.8) * 100));
   const mom = m.momentum == null ? null : Math.max(0, Math.min(100, 50 + m.momentum * 0.8));
+  // Search = the score's two Google parts together (growth 24%, level 18%)
+  const searchParts = [[mom, 0.24], [m.interest, 0.18]].filter(([v]) => v != null);
+  const searchW = searchParts.reduce((a, [, w]) => a + w, 0);
+  const searchPct = searchW ? searchParts.reduce((a, [v, w]) => a + v * w, 0) / searchW : null;
 
   $("#sheet").innerHTML = `
     <button class="sheet-close" aria-label="Close">×</button>
@@ -1119,11 +1129,10 @@ function openSheet(slug, opts) {
     <h4>Signal breakdown</h4>
     <div class="bars">
       ${bar("Hype", m.hype, true)}
-      ${bar("Interest", m.interest)}
-      ${bar("Momentum", mom)}
-      ${bar("Buzz", m.buzz)}
-      ${bar("Sentiment", sentPct)}
+      ${bar("Search", searchPct)}
       ${bar("Resale", resalePct)}
+      ${bar("Buzz", m.buzz)}
+      ${bar("Mood", sentPct)}
     </div>
 
     ${regionList(m)}
@@ -1152,7 +1161,7 @@ function openSheet(slug, opts) {
         <div>${m.sent_summary.posts} scored posts</div>
         ${m.sent_summary.praise ? `<div>Praised for <b>${esc(m.sent_summary.praise)}</b></div>` : ""}
         ${m.sent_summary.complaint ? `<div>Top complaint: <b>${esc(m.sent_summary.complaint)}</b></div>` : ""}
-        ${m.audience_lean ? `<div title="Inferred from this shoe's mix of platforms (TikTok, Instagram, YouTube, Bluesky), each weighted by its own well-documented audience skew — not measured, and never an exact age.">Audience: <b>${esc(m.audience_lean.label)}</b> <span class="al-range">(${esc(m.audience_lean.range)}, inferred)</span></div>` : ""}
+        ${m.audience_lean ? `<div title="Inferred from this shoe's mix of platforms (YouTube, Bluesky), each weighted by its own well-documented audience skew — not measured, and never an exact age.">Audience: <b>${esc(m.audience_lean.label)}</b> <span class="al-range">(${esc(m.audience_lean.range)}, inferred)</span></div>` : ""}
       </div>
     </div>` : ""}
 
@@ -1186,6 +1195,7 @@ function openSheet(slug, opts) {
     <div class="sheet-insight">${esc(m.insight) || "No insight available."}</div>
 
     <h4>Demand &amp; 30-day forecast</h4>
+    ${outlookNote(m)}
     ${demandChart(m)}
 
     <h4>Resale ${(m.resale_series || {}).stockx?.length ? "· StockX vs eBay" : "· live eBay asks"}${m.price_outlook && m.price_outlook.ok ? " · 30-day forecast" : ""}</h4>
@@ -1445,4 +1455,57 @@ function renderHomeDrops() {
   sec.classList.remove("empty");
   $("#hd-list").innerHTML = next.map(dropRow).join("");
   $$("#hd-list .dr-idx").forEach((b) => (b.onclick = () => openSheet(b.dataset.slug)));
+}
+
+/* ---------------- 30-day outlook (insights/outlook.py) ----------------
+   Only calls whose kind passed the walk-forward test are in the data: today
+   that's "likely to cool" (searches falling vs. other shoes next month). */
+function outlookTrack(side) {
+  const o = (DATA.outlook_model || {})[side];
+  return o && o.calls ? { pct: Math.round((o.right / o.calls) * 100), calls: o.calls } : null;
+}
+function outlookNote(m, cls = "ol-note") {
+  const o = m.outlook30;
+  if (!o) return "";
+  const tr = outlookTrack(o.label);
+  const what = `Google searches likely to ${o.label === "cool" ? "cool" : "rise"}, compared with other shoes`;
+  return `<p class="${cls}"><b>Next 30 days:</b> ${what}.${tr ? ` In testing on past months, ${tr.pct}% of these calls
+    were right (${tr.calls.toLocaleString("en-US")} calls; a coin flip is 50%).` : ""}</p>`;
+}
+function renderNextMonth() {
+  const el = $("#nm-body");
+  if (!el) return;
+  const st = DATA.signal_backtest || {}, om = DATA.outlook_model || {};
+  const d = (st.outcomes || {}).demand || {}, r = (st.outcomes || {}).resale || {};
+  if (!Object.keys(d).length) { el.innerHTML = ""; return; }
+  const names = { level: "Search level", growth: "Search growth", resale: "Resale price", buzz: "Social buzz",
+                  mood: "Mood", score: "The Hype Score itself" };
+  const word = (x) => x == null ? "—" : x.ic >= 0.05 && (x.t || 0) >= 2 ? `<b>Yes</b> (${x.ic.toFixed(2)})`
+    : x.ic <= -0.05 && (x.t || 0) <= -2 ? `The opposite (${x.ic.toFixed(2)})` : `Not reliably (${x.ic.toFixed(2)})`;
+  const rows = ["level", "growth", "resale", "buzz", "mood", "score"].filter((k) => d[k] || r[k]).map((k) =>
+    `<tr><td>${names[k]}</td><td>${word(d[k])}</td><td>${word(r[k])}</td></tr>`).join("");
+  const cool = om.cool, rise = om.rise;
+  el.innerHTML = `
+    <h3 class="nm-h">And next month?</h3>
+    <p class="section-sub">The Hype Score says how hot a shoe is <em>now</em>. We also tested whether each of its parts
+      predicts a shoe getting hotter over the next ${st.horizon_days || 30} days than the other shoes, on
+      ${st.test_days} weekly snapshots of past data (${st.first} to ${st.last}), using only what was known on each day.</p>
+    <table class="bq-table nm-table"><thead><tr><th>Signal</th><th>Predicts more Google searches?</th>
+      <th>Predicts a higher eBay price?</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="bt-note">Numbers are rank correlations across shoes (0 = no signal, +0.1 = useful, negative = the opposite).
+      "Yes" needs +0.05 or more and a t-stat of 2+. eBay price history is short (${(r.resale || {}).days || 0} test weeks),
+      so read that column as early. Plainly: hype spikes fade, and high resale premiums tend to cool.</p>
+    ${om.live ? `<div class="nm-ol">
+      <h3 class="nm-h">The 30-day outlook</h3>
+      <p class="section-sub">So we trained a separate model on those same readings to flag next month's direction, and
+        tested it honestly: each week predicted only from weeks whose result was already known.</p>
+      <div class="bt-foot">
+        <span><b>${cool ? Math.round(cool.right / cool.calls * 100) : "—"}%</b> of "likely to cool" calls right
+          (${cool ? cool.calls.toLocaleString("en-US") : 0} calls)</span>
+        <span><b>${rise ? Math.round(rise.right / rise.calls * 100) : "—"}%</b> of "likely to rise" calls right${rise && !rise.live ? " — no better than chance, so not shown" : ""}</span>
+        <span><b>${om.test_weeks}</b> test weeks · a coin flip is 50%</span>
+      </div>
+      <p class="bt-note">Shown on a shoe only for the kinds of calls that beat a coin flip in testing (t-stat 2+ over
+        12+ weeks). Today that's <b>${[cool && cool.live ? "cooling" : null, rise && rise.live ? "rising" : null].filter(Boolean).join(" and ") || "none"}</b>.
+        Re-tested every night.</p></div>` : ""}`;
 }
