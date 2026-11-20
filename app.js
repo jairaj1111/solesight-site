@@ -97,6 +97,28 @@ const fmtSigned = (v, unit = "") =>
 const deltaClass = (v) => (v == null ? "flat" : v > 1 ? "up" : v < -1 ? "down" : "flat");
 const arrow = (v) => (v == null ? "" : v > 1 ? "▲" : v < -1 ? "▼" : "▬");
 const esc = (s) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const compactNum = (v) => v >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : `${v}`;
+
+// What's behind a shoe's Buzz: outlets whose headline names it, YouTube views
+// on videos posted in the last 14 days, and social posts.
+function buzzWhy(m) {
+  const p = m.buzz_parts || {};
+  const bits = [];
+  if (p.outlets) bits.push(`${p.outlets} outlet${p.outlets === 1 ? "" : "s"}`);
+  if (p.video) bits.push(`${compactNum(p.video)} on YouTube`);
+  if (p.posts) bits.push(`${p.posts} post${p.posts === 1 ? "" : "s"}`);
+  return bits.join(" · ") || "no talk in 14 days";
+}
+
+// The number a card leads with follows the Rank by control.
+function mainMetric(m) {
+  if (SORT === "buzz") return { v: m.buzz == null ? "—" : Math.round(m.buzz), label: "Buzz" };
+  if (SORT === "resale_premium") return { v: m.resale_premium == null ? "—" : `${m.resale_premium}×`, label: "Resale" };
+  return { v: m.hype ?? "—", label: "Hype" };
+}
+// Hype order shows the shoe's place in the whole index; any other order
+// numbers the cards 1, 2, 3 in that order.
+const shownRank = (m, i) => (SORT === "hype" ? m.rank : i + 1);
 
 init();
 
@@ -641,7 +663,7 @@ function render() {
   renderStageNote(list.length);
   renderPodium(list.slice(0, 3));
   const rest = SHOW_ALL ? list.slice(3) : list.slice(3, FEATURED);
-  renderBoard(rest);
+  renderBoard(rest, 3);
   renderBoardFoot(list.length);
   renderMovers();
   renderMarket();
@@ -673,33 +695,43 @@ function renderBoardFoot(total) {
 }
 
 function renderPodium(top) {
-  $("#podium").innerHTML = top.map((m) => `
+  $("#podium").innerHTML = top.map((m, i) => {
+    const mm = mainMetric(m);
+    return `
     <div class="pod reveal" data-slug="${m.slug}">
       <div class="pod-glow"></div>
-      <div class="pod-rank">${m.rank}</div>
+      <div class="pod-rank">${shownRank(m, i)}</div>
       <div class="pod-img">${img(m, "")}</div>
       <div class="pod-brand">${esc(m.brand)} ${pendingBadge(m)}</div>
       <div class="pod-name">${esc(m.name)}</div>
       <div class="pod-foot">
-        <div class="pod-score">${m.hype ?? "—"}<small>Hype</small></div>
-        <div class="delta ${deltaClass(m.momentum)}">${arrow(m.momentum)} ${fmtSigned(m.momentum, "%")}</div>
+        <div class="pod-score">${mm.v}<small>${mm.label}</small></div>
+        ${SORT === "buzz"
+          ? `<div class="pod-why">${esc(buzzWhy(m))}</div>`
+          : `<div class="delta ${deltaClass(m.momentum)}">${arrow(m.momentum)} ${fmtSigned(m.momentum, "%")}</div>`}
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   bindCards("#podium .pod");
   wireReveal();
 }
 
-function renderBoard(rest) {
-  $("#board").innerHTML = rest.map((m) => `
+function renderBoard(rest, offset = 0) {
+  $("#board").innerHTML = rest.map((m, i) => {
+    const mm = mainMetric(m);
+    return `
     <div class="row" data-slug="${m.slug}">
-      <div class="row-rank">${m.rank}</div>
+      <div class="row-rank">${shownRank(m, i + offset)}</div>
       <div class="row-thumb">${img(m, "")}</div>
-      <div class="row-name"><b>${esc(m.name)}</b><span>${esc(m.brand)}</span> ${pendingBadge(m)}</div>
+      <div class="row-name"><b>${esc(m.name)}</b>${SORT === "buzz"
+        ? `<span class="row-why" title="Last 14 days">${esc(buzzWhy(m))}</span>`
+        : `<span>${esc(m.brand)}</span>`} ${pendingBadge(m)}</div>
       <div class="row-spark col-hide">${spark(m.trend)}</div>
       <div class="row-metric col-hide"><b>${m.resale_premium ?? "—"}×</b><span>Resale</span></div>
       <div class="row-metric"><span class="delta ${deltaClass(m.momentum)}">${arrow(m.momentum)} ${fmtSigned(m.momentum, "%")}</span><span>Momentum</span></div>
-      <div class="row-hype"><b>${m.hype ?? "—"}</b></div>
-    </div>`).join("");
+      <div class="row-hype"><b>${mm.v}</b>${mm.label !== "Hype" ? `<small>${mm.label}</small>` : ""}</div>
+    </div>`;
+  }).join("");
   bindCards("#board .row");
 }
 
@@ -1005,15 +1037,6 @@ const EVENT_LABELS = {
   coverage: "coverage",
 };
 
-// every platform listed is real ingested engagement; Instagram/TikTok aren't
-// collected (no usable API), so they aren't shown at all
-const PLATFORM_META = [
-  { key: "bluesky", label: "Bluesky", live: true },
-  { key: "youtube", label: "YouTube", live: true },
-  { key: "reddit", label: "Reddit", live: true },
-  { key: "mastodon", label: "Mastodon", live: true },
-];
-
 /* Where to buy — a real listing when we have one (eBay's cheapest live ask,
    pulled straight from the Browse API), else a deep-link to each
    marketplace's search for this exact model. Works for every shoe, and the
@@ -1137,21 +1160,23 @@ function openSheet(slug, opts) {
 
     ${regionList(m)}
 
-    ${(m.buzz != null || (m.platforms && Object.keys(m.platforms).length)) ? `
-    <h4>Social buzz breakdown</h4>
+    ${m.buzz != null ? `
+    <h4>Buzz breakdown</h4>
     <div class="social-summary">
-      <b>${m.buzz ?? "—"}</b><span class="of">/ 100 buzz index</span>
-      ${m.buzz_momentum != null ? `<span class="delta ${deltaClass(m.buzz_momentum)}" style="margin-left:auto">${arrow(m.buzz_momentum)} ${fmtSigned(m.buzz_momentum, "%")}</span>` : ""}
+      <b>${Math.round(m.buzz)}</b><span class="of">/ 100 · how much it's talked about vs. other shoes</span>
+      ${m.buzz_momentum != null ? `<span class="delta ${deltaClass(m.buzz_momentum)}" style="margin-left:auto" title="Mentions (stories, videos, posts) vs. the 14 days before">${arrow(m.buzz_momentum)} ${fmtSigned(m.buzz_momentum, "%")}</span>` : ""}
     </div>
     <div class="platform-list">
-      ${PLATFORM_META.map((p) => {
-        const val = (m.platforms || {})[p.key];
-        return `<div class="platform-row">
-          <span class="platform-name">${p.label}<i class="platform-badge ${p.live ? "pf-live" : "pf-modeled"}">${p.live ? "live" : "modeled"}</i></span>
-          <span class="platform-val">${val ? val.toLocaleString() + " engagements/14d" : "—"}</span>
-        </div>`;
-      }).join("")}
-    </div>` : ""}
+      ${(() => {
+        const p = m.buzz_parts || {};
+        const row = (name, val) => `<div class="platform-row">
+          <span class="platform-name">${name}</span><span class="platform-val">${val}</span></div>`;
+        return row("Press", p.outlets ? `${p.outlets} outlet${p.outlets === 1 ? "" : "s"} · ${p.articles} stor${p.articles === 1 ? "y" : "ies"}` : "—")
+          + row("YouTube", p.videos ? `${p.video.toLocaleString()} views on ${p.videos} new video${p.videos === 1 ? "" : "s"}` : "—")
+          + row("Bluesky, Reddit, Mastodon", p.posts ? `${p.posts} post${p.posts === 1 ? "" : "s"}` : "—");
+      })()}
+    </div>
+    <p class="sheet-note">Last 14 days. Each kind of talk is ranked against every tracked shoe, then blended: press 40%, YouTube 35%, posts 25%.</p>` : ""}
 
     ${m.sent_summary ? `
     <h4>Community pulse</h4>
