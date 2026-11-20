@@ -113,7 +113,8 @@ function buzzWhy(m) {
 // The number a card leads with follows the Rank by control.
 function mainMetric(m) {
   if (SORT === "buzz") return { v: m.buzz == null ? "—" : Math.round(m.buzz), label: "Buzz" };
-  if (SORT === "resale_premium") return { v: m.resale_premium == null ? "—" : `${m.resale_premium}×`, label: "Resale" };
+  if (SORT === "resale_premium") return { v: m.resale_premium == null ? "—" : `${m.resale_premium}×`, label: "Premium" };
+  if (SORT === "resale_last") return { v: m.resale_last == null ? "—" : "$" + Math.round(m.resale_last).toLocaleString(), label: "Price" };
   return { v: m.hype ?? "—", label: "Hype" };
 }
 // Hype order shows the shoe's place in the whole index; any other order
