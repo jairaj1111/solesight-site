@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://solesight.xyz/og.png" />
   <meta property="og:url" content="https://solesight.xyz/" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="stylesheet" href="styles.css?v=68" />
+  <link rel="stylesheet" href="styles.css?v=69" />
 </head>
 <body>
   <a href="#top" class="skip-link">Skip to content</a>
@@ -37,6 +37,7 @@
       <a href="market.html" data-page="market">Market</a>
       <a href="system.html" data-page="system">How it works</a>
       <a href="case-study.html" data-page="case-study">Case study</a>
+      <a href="track-record.html" data-page="track-record">Track record</a>
       <a href="boutiques.html" data-page="boutiques" class="nav-cta">For boutiques</a>
     </nav>
     <div class="nav-live"><span class="live-dot"></span> Updated nightly</div>
@@ -138,6 +139,14 @@
         momentum and share of the top&nbsp;10.</p>
       <div class="mkt-table" id="mkt-brands"></div>
       <div class="mkt-cats" id="mkt-cats"></div>
+    </section>
+
+    <!-- ───────────────── track record ───────────────── -->
+    <section class="bt tr" id="track-record" data-page="track-record">
+      <h2 class="section-title">Track <em>record</em></h2>
+      <p class="section-sub">Every "likely to cool" call the 30-day outlook makes, checked against what
+        happened next. Proof, not promises.</p>
+      <div id="tr-body"><!-- filled by JS from data.json --></div>
     </section>
 
     <!-- ───────────────── case study ───────────────── -->
@@ -466,6 +475,7 @@ score = % of all recorded daily raw scores below it</pre>
         <a href="system.html" data-page="system">How it works</a>
         <a href="case-study.html" data-page="case-study">Case study</a>
         <a href="predict.html" data-page="predict">Does it predict?</a>
+        <a href="track-record.html" data-page="track-record">Track record</a>
         <a href="method.html" data-page="method">Method</a></div>
       <div class="footer-col"><span class="footer-h">Follow</span>
         <a href="boutiques.html" data-page="boutiques">For boutiques</a>
@@ -484,7 +494,7 @@ score = % of all recorded daily raw scores below it</pre>
   <aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-modal="true"
     aria-labelledby="sheet-title" tabindex="-1"></aside>
 
-  <script src="app.js?v=62"></script>
+  <script src="app.js?v=63"></script>
   <script src="config.js?v=1"></script>
   <script src="boutique.js?v=29"></script>
   <script src="account.js?v=1"></script>

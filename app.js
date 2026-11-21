@@ -18,6 +18,7 @@ const PAGE_TITLES = {
   market: "Market — SoleSight",
   "case-study": "Case Study — SoleSight",
   predict: "Does it predict? — SoleSight",
+  "track-record": "Track record — SoleSight",
   system: "System — SoleSight",
   method: "Method — SoleSight",
 };
@@ -140,6 +141,7 @@ async function init() {
   renderCase();
   renderBacktest();
   renderNextMonth();
+  renderTrackRecord();
   renderWorkedExample();
   render();
   wireControls();
@@ -1533,5 +1535,103 @@ function renderNextMonth() {
       </div>
       <p class="bt-note">Shown on a shoe only for the kinds of calls that beat a coin flip in testing (t-stat 2+ over
         12+ weeks). Today that's <b>${[cool && cool.live ? "cooling" : null, rise && rise.live ? "rising" : null].filter(Boolean).join(" and ") || "none"}</b>.
-        Re-tested every night.</p></div>` : ""}`;
+        Re-tested every night. <a href="track-record.html" data-page="track-record">See every call →</a></p></div>` : ""}`;
+}
+
+/* ---------------- track record: every cooling call, checked ---------------- */
+function renderTrackRecord() {
+  const el = $("#tr-body");
+  if (!el) return;
+  const tr = DATA.track_record;
+  if (!tr || !tr.test || !tr.test.calls) {
+    el.innerHTML = `<p class="bt-note">The track record appears once the 30-day outlook has enough tested weeks.</p>`;
+    return;
+  }
+  const name = (slug) => (DATA.models.find((m) => m.slug === slug) || {}).name
+    || slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const fmtD = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const pctTxt = (v) => v == null ? "—" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(Math.round(v * 100))}%`;
+  const t = tr.test, live = tr.live || {};
+  const rate = t.calls ? Math.round(t.right / t.calls * 100) : 0;
+
+  // weekly hit rate: one bar per test week, 50% coin-flip line (HTML bars, so
+  // labels stay sharp at any width)
+  const n = t.weekly.length;
+  const bars = t.weekly.map((w, i) => {
+    const v = w.calls ? w.right / w.calls : 0;
+    return `<div class="tr-bar" data-i="${i}" tabindex="0" aria-label="Week of ${fmtD(w.week)}: ${w.right} of ${w.calls} right">
+      <span style="height:${(v * 100).toFixed(1)}%"></span></div>`;
+  }).join("");
+  const xl = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i)
+    .map((i) => `<span style="left:${((i + 0.5) / n * 100).toFixed(2)}%">${fmtD(t.weekly[i].week)}</span>`).join("");
+  const chart = `<div class="tr-chart" role="img" aria-label="Share of cooling calls right each test week">
+    <div class="tr-y"><span style="bottom:100%">100%</span><span style="bottom:50%">50%</span><span style="bottom:0">0%</span></div>
+    <div class="tr-plot">${bars}<div class="tr-coin" aria-hidden="true"></div></div>
+    <div class="tr-x">${xl}</div>
+    <div class="tr-tip" hidden></div>
+  </div>
+  <p class="tr-cap">Share of the week's cooling calls that came true · dashed line = a coin flip (50%)</p>`;
+
+  const weeks = (tr.recent_weeks || []).map((w) => {
+    const right = w.calls.filter((c) => c.hit).length;
+    return `<div class="tr-week">
+      <div class="tr-week-h"><b>Called ${fmtD(w.week)}</b><span>${right} of ${w.calls.length} right · typical shoe's searches ${pctTxt(w.median)}</span></div>
+      <div class="tr-calls">${w.calls.map((c) => `<span class="tr-call ${c.hit ? "ok" : "miss"}" title="Google searches over the next ${tr.horizon_days} days: ${pctTxt(c.change)}">
+        <i aria-hidden="true">${c.hit ? "✓" : "✗"}</i>${esc(name(c.slug))} <em>${pctTxt(c.change)}</em><span class="sr">${c.hit ? "right" : "wrong"}</span></span>`).join("")}</div>
+    </div>`;
+  }).join("");
+
+  const lc = (live.by_label || {}).cool;
+  const liveBlock = !live.since
+    ? `<p class="bt-note">Live logging starts the first night the outlook shows a call.</p>`
+    : lc
+      ? `<div class="bt-foot"><span><b>${Math.round(lc.right / lc.resolved * 100)}%</b> of live cooling calls right (${lc.right} of ${lc.resolved})</span>
+          <span><b>${live.pending}</b> calls still inside their ${tr.horizon_days} days</span></div>
+        <table class="bq-table tr-live"><thead><tr><th>Called</th><th>Shoe</th><th class="num">Searches, next ${tr.horizon_days} days</th><th class="num">Typical shoe</th><th>Result</th></tr></thead>
+          <tbody>${live.recent.filter((c) => c.label === "cool").slice(0, 20).map((c) => `<tr><td>${fmtD(c.date)}</td><td>${esc(name(c.slug))}</td>
+            <td class="num">${pctTxt(c.change)}</td><td class="num">${pctTxt(c.median)}</td><td>${c.hit ? "✓ right" : "✗ wrong"}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="bt-note">Logging every call shown on the site since <b>${fmtD(live.since)}</b>. ${live.pending} call${live.pending === 1 ? " is" : "s are"} waiting for their ${tr.horizon_days} days to pass; the first results come in <b>${live.next_due ? fmtD(live.next_due) : "soon"}</b>.</p>`;
+
+  el.innerHTML = `
+    <div class="bt-foot tr-head">
+      <span><b>${rate}%</b> of cooling calls came true</span>
+      <span><b>${t.right.toLocaleString("en-US")} of ${t.calls.toLocaleString("en-US")}</b> calls</span>
+      <span><b>${t.weeks}</b> weeks tested (${fmtD(t.first)} – ${fmtD(t.last)})</span>
+      <span><b>50%</b> a coin flip</span>
+    </div>
+    <p class="bt-note"><b>What counts as right:</b> each week the outlook names the third of shoes most likely to cool.
+      A call is right when, over the next ${tr.horizon_days} days, that shoe's Google searches did worse than the typical
+      (median) tracked shoe's. These are from the honest test: each week was called using only data from before it.</p>
+    ${chart}
+    <details class="tr-table"><summary>Weekly numbers</summary>
+      <table class="bq-table"><thead><tr><th>Week</th><th class="num">Right</th><th class="num">Calls</th><th class="num">Share</th></tr></thead>
+      <tbody>${t.weekly.slice().reverse().map((w) => `<tr><td>${fmtD(w.week)}</td><td class="num">${w.right}</td><td class="num">${w.calls}</td>
+        <td class="num">${Math.round(w.right / w.calls * 100)}%</td></tr>`).join("")}</tbody></table></details>
+    <h3 class="nm-h">Live, as published</h3>
+    <p class="section-sub">The test above was run on past data. Since the outlook went live, every call shown on a shoe is
+      logged the night it appears and scored ${tr.horizon_days} days later the same way.</p>
+    ${liveBlock}
+    <h3 class="nm-h">Recent calls</h3>
+    <p class="section-sub">The latest tested weeks, shoe by shoe, with each shoe's Google search change over the following
+      ${tr.horizon_days} days. −100% means searches fell below what Google reports.</p>
+    ${weeks}`;
+
+  const tip = el.querySelector(".tr-tip"), box = el.querySelector(".tr-chart");
+  el.querySelectorAll(".tr-bar").forEach((g) => {
+    const show = (ev) => {
+      const w = t.weekly[+g.dataset.i];
+      tip.innerHTML = `<b>Week of ${fmtD(w.week)}</b><br>${w.right} of ${w.calls} right (${Math.round(w.right / w.calls * 100)}%)`;
+      tip.hidden = false;
+      const r = box.getBoundingClientRect(), gr = g.getBoundingClientRect();
+      const x = Math.min(Math.max(gr.left - r.left + gr.width / 2, 70), r.width - 70);
+      tip.style.left = `${x}px`;
+      g.classList.add("on");
+    };
+    const hide = () => { tip.hidden = true; g.classList.remove("on"); };
+    g.addEventListener("mouseenter", show);
+    g.addEventListener("mouseleave", hide);
+    g.addEventListener("focus", show);
+    g.addEventListener("blur", hide);
+    g.addEventListener("touchstart", show, { passive: true });
+  });
 }
