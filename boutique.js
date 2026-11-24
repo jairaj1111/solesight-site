@@ -451,14 +451,19 @@ function bqAnalyze(rows, myStore) {
     const toAdd = colorways.filter((c) => !c.carried && !legacy && bqSellingOut(c))
       .sort((a, b) => bqCwDemand(b) - bqCwDemand(a)).slice(0, 2);
     const comps = bqCompetitors(e.m, myStore, mineCw);
-    const myPrice = bqMedian(e.prices);
+    // the shop's own price gets the same sanity band as competitors' (0.5x-2x the
+    // shoe's deadstock ask or retail): far outside it, the listing is probably a
+    // different edition, so it isn't compared
+    const rawPrice = bqMedian(e.prices), pRef = e.m.resale_last || e.m.retail;
+    const myPriceOdd = rawPrice && pRef && (rawPrice < 0.5 * pRef || rawPrice > 2 * pRef) ? rawPrice : null;
+    const myPrice = myPriceOdd ? null : rawPrice;
     // compare prices against the same colorway when another shop lists it
     const sameComps = comps.filter((c) => c.same && c.comparable);
     const compBasis = sameComps.length ? "same" : mineCw.length && !legacy ? "other" : "all";
     const compPrice = bqMedian((sameComps.length ? sameComps : comps.filter((c) => c.comparable)).map((c) => c.price));
     const outPool = comps.some((c) => c.same) ? comps.filter((c) => c.same) : comps;
     const storesOf = (xs) => new Set(xs.map((c) => c.store)).size;
-    return { ...e, verdict: v, sizes, missingSizes, colorways, mineCw, toAdd, comps, myPrice, compPrice, compBasis,
+    return { ...e, verdict: v, sizes, missingSizes, colorways, mineCw, toAdd, comps, myPrice, myPriceOdd, compPrice, compBasis,
              soldOutAt: storesOf(outPool.filter((c) => c.left === 0)), compStores: storesOf(outPool) };
   });
   const order = { reorder: 0, hold: 1, "hold-off": 2, markdown: 3 };
@@ -575,10 +580,12 @@ function bqCompBlock(e) {
   if (e.myPrice && e.compPrice) {
     const d = Math.round(e.myPrice - e.compPrice);
     const vs = e.compBasis === "same" ? "the median competitor for your colorway"
-      : e.compBasis === "other" ? "the median competitor (other colorways — no tracked shop lists yours)" : "the median competitor";
+      : e.compBasis === "other" ? "the median competitor in other colorways" : "the median competitor";
     gap = Math.abs(d) < 5 ? `Your price ($${Math.round(e.myPrice)}) is in line with ${vs}.`
       : `Your price ($${Math.round(e.myPrice)}) is <b>$${Math.abs(d)} ${d > 0 ? "above" : "below"}</b> ${vs} ($${Math.round(e.compPrice)}).`;
+    if (e.compBasis === "other") gap += " No tracked shop lists your colorway.";
   }
+  if (e.myPriceOdd) gap = `Your price ($${Math.round(e.myPriceOdd)}) is far from this shoe's usual range, so it may be a different edition; it isn't compared.`;
   const cs = e.compStores || nStores;
   const scarce = e.soldOutAt && e.units > 0
     ? `${e.compBasis === "same" ? "Your colorway is sold" : "Sold"} out at ${e.soldOutAt} of ${cs} other store${cs === 1 ? "" : "s"} — you're one of the few with stock.` : "";
@@ -614,6 +621,7 @@ function bqCwBlock(e) {
       `${esc(x.name || (x.market && x.market.name) || x.code)}${x.code && x.code !== (x.name || (x.market && x.market.name)) ? ` (${esc(x.code)})` : ""}${x.units != null ? ` · ${x.units} pair${x.units === 1 ? "" : "s"}` : ""}${
         x.market ? (bqSellingOut(x.market) ? " · <b>selling out elsewhere</b>" : "") : " · no tracked shop lists it"}`).join("; ")}${
         mine.length > MINE_CAP ? `; and ${mine.length - MINE_CAP} more` : ""}</p>`
+    : window.BQ_PUBLIC ? ""     // built from a store's website: there's no file to add a column to
     : `<p class="bq-fine">Add a style code or color column to your file to see how your colorways are doing.</p>`;
   const add = e.toAdd.length ? `<p class="bq-note bq-cwadd"><b>Colorway${e.toAdd.length === 1 ? "" : "s"} to add:</b> ${e.toAdd.map((c) =>
       `${esc(c.name)}${c.code && c.code !== c.name ? ` (${esc(c.code)})` : ""} — ${c.sold_7d ? `${c.sold_7d} size${c.sold_7d === 1 ? "" : "s"} sold out this week, ` : ""}${pct(c.sold_out_share)} of sizes gone across ${c.stores} shop${c.stores === 1 ? "" : "s"}`).join("; ")}.</p>` : "";
