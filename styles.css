@@ -1694,7 +1694,7 @@ html, body { overflow-x: hidden; }
 .sheet-note { font-size: .74rem; color: var(--ink-3); margin: 6px 0 0; line-height: 1.4; }
 
 /* Track record */
-.tr { --series-1: #2a78d6; }
+.tr, .sz-chart, .sz-cap { --series-1: #2a78d6; }
 .tr-head b { font-size: 1.6rem; }
 .tr-chart { position: relative; margin: 24px 0 4px; background: var(--paper); border: 1px solid var(--line);
   border-radius: 14px; padding: 16px 14px 30px 52px; }
@@ -1728,3 +1728,31 @@ html, body { overflow-x: hidden; }
 .tr-call em { font-style: normal; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .tr-call .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .tr-live { margin-top: 12px; }
+
+/* ---------- size analytics (app.js sizeChart) ---------- */
+.sz-chart { position: relative; margin: 14px 0 4px; background: var(--paper); border: 1px solid var(--line);
+  border-radius: 12px; padding: 16px 14px 30px 52px; }
+.sz-plot { position: relative; height: 160px; display: flex; align-items: flex-end; gap: 2px;
+  border-bottom: 1px solid var(--line); }
+.sz-bar { position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; outline: none; }
+.sz-bar span { display: block; width: 100%; background: var(--series-1); border-radius: 4px 4px 0 0; min-height: 0; }
+.sz-bar[tabindex="0"] { cursor: default; }
+.sz-bar[tabindex="0"]:hover, .sz-bar:focus-visible, .sz-bar.on { background: rgba(42, 120, 214, .08); }
+.sz-ref { position: absolute; left: -1px; right: -1px; height: 0; border-top: 2px solid var(--ink); pointer-events: none; }
+.sz-y { position: absolute; left: 10px; top: 16px; height: 160px; width: 36px; }
+.sz-y span, .sz-x span { position: absolute; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.sz-y span { right: 0; transform: translateY(50%); }
+.sz-x { position: absolute; left: 52px; right: 14px; bottom: 8px; height: 14px; }
+.sz-x span { transform: translateX(-50%); white-space: nowrap; }
+.sz-tip { min-width: 170px; }
+.sz-cap { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.sz-key { display: inline-flex; align-items: center; gap: 6px; }
+.sz-key i { display: inline-block; }
+.sz-key .sw-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--series-1); }
+.sz-key .sw-ref { width: 14px; height: 0; border-top: 2px solid var(--ink); }
+.sz-market { margin-top: 8px; }
+@media (max-width: 560px) {
+  .sz-chart { padding-left: 44px; padding-right: 8px; }
+  .sz-x { left: 44px; right: 8px; }
+  .sz-plot { gap: 1px; }
+}

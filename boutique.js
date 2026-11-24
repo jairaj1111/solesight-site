@@ -109,6 +109,39 @@ function bqMatch(row, index) {
 // stocking-depth effect).
 const BQ_PRIOR = { 7: .35, 7.5: .4, 8: .5, 8.5: .55, 9: .62, 9.5: .66, 10: .7, 10.5: .68,
                    11: .65, 11.5: .56, 12: .5, 12.5: .42, 13: .4, 14: .3 };
+// The starting curve now comes from real sell-outs at tracked shops
+// (DATA.sizes, solesight/insights/sizes.py): each size's share of sell-outs,
+// scaled so the best-selling size sits where BQ_PRIOR's peak did (0.7), which
+// keeps the hot (>= 0.6) / cold (< 0.4) thresholds meaning the same thing. A
+// shoe with its own size curve (20+ sell-outs) blends it in, weighted by how
+// many sell-outs it has. BQ_PRIOR is only the fallback until the market has
+// BQ_MIN_MARKET sell-outs counted.
+const BQ_PEAK = 0.7, BQ_MIN_MARKET = 150, BQ_OWN_K = 40;
+function bqSizeBase(m) {
+  const mk = DATA.sizes;
+  if (!mk || !mk.sizes || (mk.sellouts || 0) < BQ_MIN_MARKET) {
+    return { of: (z) => BQ_PRIOR[z] ?? 0.3, source: "curve", sellouts: 0 };
+  }
+  const rel = (share) => {
+    const peak = Math.max(...Object.values(share));
+    const o = {};
+    Object.entries(share).forEach(([z, v]) => { o[z] = peak ? BQ_PEAK * v / peak : 0; });
+    return o;
+  };
+  const mShare = Object.fromEntries(mk.sizes.map((r) => [r.size, r.sales_share || 0]));
+  const sd = m && m.size_demand;
+  const own = sd && sd.own_curve;
+  // a shoe's own sell-outs per size, shrunk toward the market's share: with
+  // 50 sales, a size with none yet is noise, not proof nobody buys it
+  let share = mShare;
+  if (own) {
+    const n = Object.fromEntries(sd.sizes.map((r) => [r.size, r.sellouts || 0]));
+    share = Object.fromEntries(Object.keys(mShare).map((z) =>
+      [z, ((n[z] || 0) + BQ_OWN_K * mShare[z]) / (sd.sellouts + BQ_OWN_K)]));
+  }
+  const curve = rel(share);
+  return { of: (z) => curve[z] ?? 0.15, source: own ? "shoe" : "market", sellouts: own ? sd.sellouts : mk.sellouts };
+}
 function bqGlobalCurve() {
   const c = {};
   DATA.models.forEach((m) => (m.size_sources || []).filter((s) => s.kind === "boutique")
@@ -120,6 +153,15 @@ function bqGlobalCurve() {
   const out = {};
   Object.entries(c).forEach(([k, v]) => (out[k] = v.n >= 5 ? v.out / v.n : 0.5));
   return out;
+}
+// "Sizes that sell" for one shoe in the report: only with its own size curve
+function bqSellLine(m) {
+  const sd = m.size_demand;
+  if (!sd || !sd.own_curve || !sd.hot || !sd.hot.length) return "";
+  const share = sd.sizes.filter((r) => sd.hot.includes(r.size)).reduce((a, r) => a + (r.sales_share || 0), 0);
+  const sizes = typeof szRange === "function" ? szRange(sd.hot) : sd.hot.join(", ");
+  return `<p class="bq-note"><b>Sizes that sell:</b> ${sizes}, ${Math.round(share * 100)}% of its ${sd.sellouts}
+    sell-outs at tracked shops${DATA.sizes && DATA.sizes.since ? ` since ${new Date(DATA.sizes.since + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}.</p>`;
 }
 function bqSizeScores(m, global) {
   const stat = {};
@@ -133,14 +175,15 @@ function bqSizeScores(m, global) {
     .forEach((s) => s.sizes.forEach((z) => { const k = bqSize(z.size); if (k && z.price) asks[k] = z.price; }));
   const askVals = Object.values(asks).sort((a, b) => a - b);
   const med = askVals.length ? askVals[Math.floor(askVals.length / 2)] : null;
+  const base = bqSizeBase(m);
   return (size) => {
     const g = global[size] ?? 0.5, s = stat[size] || { n: 0, out: 0 };
-    let score = BQ_PRIOR[size] ?? 0.3;
+    let score = base.of(size);
     // sells out here more (or less) than this size usually does, shrunk when few listings
     if (s.n) score += 0.3 * (s.out / s.n - g) * (s.n / (s.n + 2));
     // resells above (or below) this shoe's typical deadstock ask
     if (med && asks[size]) score += 0.25 * Math.max(-0.5, Math.min(0.5, asks[size] / med - 1));
-    return { score: Math.max(0, Math.min(1, score)), seen: s.n, ask: asks[size] || null };
+    return { score: Math.max(0, Math.min(1, score)), seen: s.n, ask: asks[size] || null, base: base.source };
   };
 }
 
@@ -512,9 +555,10 @@ function bqRender(rep) {
         <h4 class="bq-name" data-slug="${e.m.slug}">${esc(e.m.name)}</h4>
         <div class="bq-meta">${window.BQ_PUBLIC ? `${e.sizes.filter((z) => z.qty).length} of ${e.sizes.length} sizes in stock on your site` : `${e.units} pairs in stock · matched by ${e.how}`}${e.sold != null ? ` · ${e.sold} sold` : ""}${e.m.resale_premium ? ` · resells at ${e.m.resale_premium.toFixed(1)}× retail` : ""}</div>
         ${e.sizes.length ? `<div class="bq-sizes">${e.sizes.map((s) => `
-          <span class="bq-size ${s.verdict}" title="Demand ${Math.round(s.score * 100)}/100 · ${s.seen ? `${s.seen} tracked store listing${s.seen === 1 ? "" : "s"}` : "market-wide size curve"}${s.ask ? ` · eBay ask $${Math.round(s.ask)}` : ""}">
+          <span class="bq-size ${s.verdict}" title="Demand ${Math.round(s.score * 100)}/100 · ${s.base === "shoe" ? "this shoe's sell-outs by size" : s.base === "market" ? "sell-outs by size, all shoes" : "typical size curve"}${s.seen ? ` · ${s.seen} tracked store listing${s.seen === 1 ? "" : "s"}` : ""}${s.ask ? ` · eBay ask $${Math.round(s.ask)}` : ""}">
             <b>${s.size}</b><small>${window.BQ_PUBLIC ? (s.qty ? "in stock" : "sold out") : s.qty} · ${lbl[s.verdict]}</small></span>`).join("")}</div>` : ""}
         ${typeof outlookNote === "function" ? outlookNote(e.m, "bq-note") : ""}
+        ${bqSellLine(e.m)}
         ${bqLocalText(e.m, rep.state) ? `<p class="bq-note"><b>Near you:</b> ${esc(bqLocalText(e.m, rep.state))}.</p>` : ""}
         ${e.missingSizes.length ? `<p class="bq-note"><b>Not stocked, but in demand:</b> sizes ${e.missingSizes.join(", ")}.</p>` : ""}
         ${bqOutlook(e)}
@@ -532,8 +576,8 @@ function bqRender(rep) {
     <div class="bq-actions"><button class="btn btn-solid" id="bq-pdf">Save as PDF</button>
       <button class="btn btn-ghost" id="bq-dl">Download as CSV</button>
       <span class="bq-fine">Based on tonight's index (${new Date(DATA.generated_at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}).
-        Size advice blends the typical sneaker size curve with each shoe's own resale prices and sell-outs at
-        tracked stores — guidance, not exact quantities${rep.out.some((e) => e.sold != null) || window.BQ_PUBLIC ? "" : ". Add a units-sold column to make it specific to your store"}.</span></div>
+        Size advice starts from ${bqBaseText(bqSizeBase(null))}, using each shoe's own sell-outs once it has
+        ${DATA.sizes && DATA.sizes.min_sales ? DATA.sizes.min_sales : 20}+, and is adjusted by its resale prices by size — guidance, not exact quantities${rep.out.some((e) => e.sold != null) || window.BQ_PUBLIC ? "" : ". Add a units-sold column to make it specific to your store"}.</span></div>
     ${bqOverview(rep)}
     ${bqSoldBlock(rep)}
     ${bqLocalBlock(rep)}
@@ -999,7 +1043,7 @@ function initBoutique() {
 
 /* ---------- plan a drop ----------
    How many pairs per size for an upcoming release. Weights per size start from
-   the typical sneaker size curve (BQ_PRIOR) and are adjusted like the report's
+   the sell-out size curve (bqSizeBase; BQ_PRIOR until there's enough data) and are adjusted like the report's
    size advice: by how often each size sells out at tracked shops, for this shoe
    if it's already on the index, otherwise for the brand's shoes on the index.
    Squared, so the middle of the run gets more than the tails; then the order is
@@ -1027,7 +1071,13 @@ function dpPlan(drop, total) {
   w.forEach((x) => { x.share = x.score ** 2 / sum; x.exact = x.share * total; x.pairs = Math.floor(x.exact); });
   let left = total - w.reduce((a, x) => a + x.pairs, 0);
   [...w].sort((a, b) => (b.exact - b.pairs) - (a.exact - a.pairs)).forEach((x) => { if (left > 0) { x.pairs++; left--; } });
-  return { rows: w, basis, seen: w.reduce((a, x) => a + x.seen, 0) };
+  return { rows: w, basis, seen: w.reduce((a, x) => a + x.seen, 0), base: bqSizeBase(model) };
+}
+// what the size curve under the report/plan starts from, in words
+function bqBaseText(b, name) {
+  if (b.source === "shoe") return `which sizes of ${name ? esc(name) : "this shoe"} sell out at tracked shops (${b.sellouts.toLocaleString("en-US")} sell-outs)`;
+  if (b.source === "market") return `which sizes sell out across all tracked shoes and shops (${b.sellouts.toLocaleString("en-US")} sell-outs)`;
+  return "the typical sneaker size curve";
 }
 function dpRender() {
   const out = $("#dp-out");
@@ -1045,7 +1095,7 @@ function dpRender() {
         <td class="num">${Math.round(x.share * 100)}%</td><td class="num"><b>${x.pairs}</b></td>
         <td><span class="dp-bar" style="width:${Math.round(x.pairs / peak * 100)}%"></span></td></tr>`).join("")}</tbody></table>
     <p class="bq-fine">${total} pairs of ${esc(drop.name)} (${dropWhen ? dropWhen(drop) : drop.date}${drop.price ? `, $${drop.price} retail` : ""}).
-      Based on the typical sneaker size curve, adjusted by ${plan.basis}${plan.seen ? ` (${plan.seen} size listings)` : ""}.
+      Based on ${bqBaseText(plan.base, drop.slug ? (DATA.models.find((x) => x.slug === drop.slug) || {}).name : null)}, adjusted by ${plan.basis}${plan.seen ? ` (${plan.seen} size listings)` : ""}.
       A starting point: your own past sales by size beat any curve.</p>`;
 }
 function initDropPlan() {

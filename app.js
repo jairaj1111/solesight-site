@@ -670,6 +670,7 @@ function render() {
   renderBoardFoot(list.length);
   renderMovers();
   renderMarket();
+  renderSizes();
 }
 
 // The lifecycle filter is set from the Radar page, so the Index page has to
@@ -1124,6 +1125,8 @@ function openSheet(slug, opts) {
       ${m.wiki_views ? `<div class="sf"><b>${m.wiki_views.toLocaleString()}</b><span>Wikipedia views/day${m.wiki_momentum != null ? ` · ${fmtSigned(m.wiki_momentum, "%")}` : ""} (silhouette)</span></div>` : ""}
     </div>
 
+    ${sizeSection(m)}
+
     ${(m.size_sources && m.size_sources.length) ? `
     <h4>Sizing</h4>
     <p class="size-note">Live per-size stock, by boutique — tap one to see its sizes.</p>
@@ -1236,6 +1239,7 @@ function openSheet(slug, opts) {
     </div>
   `;
   if (m.has_360) init360(m.slug, $("#sheet-360"));
+  if (m.size_demand && DATA.sizes) wireSizeChart($("#sheet-sizes"), sizeTipForShoe(m));
   $("#sheet").classList.add("on");
   $("#sheet").setAttribute("aria-hidden", "false");
   $("#sheet-backdrop").classList.add("on");
@@ -1539,6 +1543,146 @@ function renderNextMonth() {
 }
 
 /* ---------------- track record: every cooling call, checked ---------------- */
+/* ---------- size analytics ----------
+   Which sizes sell, from in-stock -> sold-out flips at tracked shops
+   (solesight/insights/sizes.py). One bar per size, 4-15. HTML bars like the
+   track record chart, so labels stay sharp at any width. */
+const SZ_CORE = Array.from({ length: 23 }, (_, i) => String(4 + i / 2));
+const szPct = (v) => v == null ? "—" : `${Math.round(v * 100)}%`;
+const szFmtD = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const szRange = (hot) => {
+  if (!hot || !hot.length) return "";
+  const f = hot.map(Number);
+  const run = f.every((v, i) => !i || v - f[i - 1] === 0.5);
+  return run && f.length > 2 ? `${hot[0]}–${hot[hot.length - 1]}` : hot.length === 1 ? hot[0]
+    : `${hot.slice(0, -1).join(", ")} and ${hot[hot.length - 1]}`;
+};
+
+// rows: [{size, value, ref?, tip}] for sizes 4-15; value/ref are shares (0-1)
+function sizeChart(rows, label, refLabel) {
+  const by = Object.fromEntries(rows.map((r) => [r.size, r]));
+  const top = Math.max(0.05, ...rows.map((r) => Math.max(r.value || 0, r.ref || 0)));
+  const max = Math.ceil(top * 20) / 20;                  // round up to a 5% step
+  const bars = SZ_CORE.map((z, i) => {
+    const r = by[z];
+    const v = r && r.value ? r.value / max : 0;
+    const ref = r && r.ref != null ? r.ref / max : null;
+    return `<div class="sz-bar${z.endsWith(".5") ? " half" : ""}" data-size="${z}" tabindex="${r ? 0 : -1}"
+        ${r ? `aria-label="Size ${z}: ${szPct(r.value)}"` : `aria-hidden="true"`}>
+      <span style="height:${(v * 100).toFixed(1)}%"></span>
+      ${ref != null ? `<i class="sz-ref" style="bottom:${(ref * 100).toFixed(1)}%"></i>` : ""}</div>`;
+  }).join("");
+  const xl = SZ_CORE.filter((z) => !z.includes(".")).map((z) =>
+    `<span style="left:${((SZ_CORE.indexOf(z) + 0.5) / SZ_CORE.length * 100).toFixed(2)}%">${z}</span>`).join("");
+  return `<div class="sz-chart" role="img" aria-label="${esc(label)}">
+      <div class="sz-y"><span style="bottom:100%">${szPct(max)}</span><span style="bottom:50%">${+(max * 50).toFixed(1)}%</span><span style="bottom:0">0%</span></div>
+      <div class="sz-plot">${bars}</div>
+      <div class="sz-x">${xl}</div>
+      <div class="tr-tip sz-tip" hidden></div>
+    </div>
+    <p class="tr-cap sz-cap">${refLabel
+      ? `<span class="sz-key"><i class="sw-bar"></i>${esc(label)}</span><span class="sz-key"><i class="sw-ref"></i>${esc(refLabel)}</span>`
+      : esc(label)} · US men's sizes</p>`;
+}
+
+function wireSizeChart(root, tipFor) {
+  const box = root && root.querySelector(".sz-chart");
+  if (!box) return;
+  const tip = box.querySelector(".sz-tip");
+  box.querySelectorAll(".sz-bar[tabindex='0']").forEach((g) => {
+    const show = () => {
+      tip.innerHTML = tipFor(g.dataset.size);
+      tip.hidden = false;
+      const r = box.getBoundingClientRect(), gr = g.getBoundingClientRect();
+      tip.style.left = `${Math.min(Math.max(gr.left - r.left + gr.width / 2, 90), r.width - 90)}px`;
+      g.classList.add("on");
+    };
+    const hide = () => { tip.hidden = true; g.classList.remove("on"); };
+    g.addEventListener("mouseenter", show);
+    g.addEventListener("mouseleave", hide);
+    g.addEventListener("focus", show);
+    g.addEventListener("blur", hide);
+    g.addEventListener("touchstart", show, { passive: true });
+  });
+}
+
+function sizeSection(m) {
+  const sd = m.size_demand, mk = DATA.sizes;
+  if (!sd || !mk || !mk.sizes || !mk.sizes.length) return "";
+  const since = mk.since ? szFmtD(mk.since) : null;
+  const marketHot = szRange(mk.hot);
+  const rows = sd.sizes.filter((r) => SZ_CORE.includes(r.size));
+  const own = sd.own_curve;
+  const chartRows = own
+    ? rows.map((r) => ({ size: r.size, value: r.sales_share, ref: r.typical_sales_share }))
+    : mk.sizes.map((r) => ({ size: r.size, value: r.sales_share }));
+  const lead = own
+    ? `<b>Size${sd.hot.length === 1 ? "" : "s"} ${szRange(sd.hot)}</b> sell out most:
+       ${szPct(sd.sizes.filter((r) => sd.hot.includes(r.size)).reduce((a, r) => a + (r.sales_share || 0), 0))}
+       of this shoe's ${sd.sellouts} sell-outs at tracked shops${since ? ` since ${since}` : ""}.`
+    : `Not enough sales yet to rank this shoe's sizes (${sd.sellouts} sell-out${sd.sellouts === 1 ? "" : "s"}${since ? ` since ${since}` : ""};
+       it takes ${mk.min_sales}). The chart shows all shoes${marketHot ? `, where sizes ${marketHot} sell most` : ""}.`;
+  const table = `<details class="tr-table"><summary>Size by size</summary>
+    <table class="bq-table"><thead><tr><th>Size</th><th class="num">Sell-outs</th><th class="num">Share</th>
+      <th class="num">Sold out now</th><th class="num">eBay ask</th></tr></thead>
+    <tbody>${sd.sizes.map((r) => `<tr><td>${r.size}</td><td class="num">${r.sellouts}</td>
+      <td class="num">${r.sales_share != null ? szPct(r.sales_share) : "—"}</td>
+      <td class="num">${r.shops ? `${r.out} of ${r.shops} shops` : "—"}</td>
+      <td class="num">${r.ask ? "$" + r.ask : "—"}</td></tr>`).join("")}</tbody></table></details>`;
+  return `<h4>Which sizes sell</h4>
+    <p class="size-note">${lead}</p>
+    <div class="sz-wrap" id="sheet-sizes">${sizeChart(chartRows,
+      own ? "Share of this shoe's sell-outs" : "Share of all sell-outs, every shoe",
+      own ? "All shoes" : null)}</div>
+    ${table}`;
+}
+
+function sizeTipForShoe(m) {
+  const by = Object.fromEntries(m.size_demand.sizes.map((r) => [r.size, r]));
+  const mk = Object.fromEntries(((DATA.sizes || {}).sizes || []).map((r) => [r.size, r]));
+  return (z) => {
+    const r = by[z], t = mk[z] || {};
+    if (!m.size_demand.own_curve) {
+      return `<b>Size ${z}</b><br>${szPct(t.sales_share)} of all sell-outs${r && r.shops ? `<br>This shoe: sold out at ${r.out} of ${r.shops} shops` : ""}`;
+    }
+    if (!r) return `<b>Size ${z}</b><br>No tracked shop lists it`;
+    return `<b>Size ${z}</b><br>${r.sellouts} sell-out${r.sellouts === 1 ? "" : "s"} (${szPct(r.sales_share)}; all shoes ${szPct(r.typical_sales_share)})
+      ${r.shops ? `<br>Sold out at ${r.out} of ${r.shops} shops now` : ""}${r.ask ? `<br>eBay ask $${r.ask}` : ""}`;
+  };
+}
+
+function renderSizes() {
+  const el = $("#sz-market");
+  if (!el) return;
+  const mk = DATA.sizes;
+  if (!mk || !mk.sizes || !mk.sellouts) {
+    el.innerHTML = `<p class="bt-note">Size data appears once tracked shops have a few nights of sell-outs to count.</p>`;
+    return;
+  }
+  const by = Object.fromEntries(mk.sizes.map((r) => [r.size, r]));
+  const hotShare = mk.sizes.filter((r) => mk.hot.includes(r.size)).reduce((a, r) => a + r.sales_share, 0);
+  const core = mk.sizes.filter((r) => +r.size >= 8 && +r.size <= 12).reduce((a, r) => a + r.sales_share, 0);
+  el.innerHTML = `
+    <div class="bt-foot tr-head">
+      <span><b>${szRange(mk.hot)}</b> the sizes that sell most (${szPct(hotShare)} of sell-outs)</span>
+      <span><b>${szPct(core)}</b> of sell-outs are sizes 8–12</span>
+      <span><b>${mk.sellouts.toLocaleString("en-US")}</b> sell-outs counted${mk.since ? ` since ${szFmtD(mk.since)}` : ""}</span>
+    </div>
+    ${sizeChart(mk.sizes.map((r) => ({ size: r.size, value: r.sales_share })), "Share of all sell-outs, every shoe")}
+    <details class="tr-table"><summary>Size by size</summary>
+      <table class="bq-table"><thead><tr><th>Size</th><th class="num">Sell-outs</th><th class="num">Share</th><th class="num">Sold out now</th></tr></thead>
+      <tbody>${mk.sizes.map((r) => `<tr><td>${r.size}</td><td class="num">${r.sellouts}</td><td class="num">${szPct(r.sales_share)}</td>
+        <td class="num">${r.out_share != null ? `${szPct(r.out_share)} of ${r.shops} listings` : "—"}</td></tr>`).join("")}</tbody></table></details>
+    <p class="bt-note"><b>How it's counted:</b> a sell-out is a size that a tracked shop listed in stock and then as sold out at
+      its next reading, within ${3} days. That's a strong sign of a sale, not proof of one: shops also hide sizes.
+      Women's-only and kids' listings are left out, and unisex labels like "M 9.5 / W 11" count as the men's size.
+      Big sizes are sold out more often (shops stock one pair of a 14), so "sold out now" alone doesn't mean popular.</p>`;
+  wireSizeChart(el, (z) => {
+    const r = by[z];
+    return `<b>Size ${z}</b><br>${r.sellouts} sell-outs (${szPct(r.sales_share)})${r.out_share != null ? `<br>Sold out now: ${szPct(r.out_share)} of listings` : ""}`;
+  });
+}
+
 function renderTrackRecord() {
   const el = $("#tr-body");
   if (!el) return;
